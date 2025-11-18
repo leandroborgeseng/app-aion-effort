@@ -24,7 +24,7 @@ import { usePermissions } from './hooks/usePermissions';
 import { useIsMobile } from './hooks/useMediaQuery';
 
 // Componente para proteger rotas que requerem autenticação
-const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
+const ProtectedRoute = ({ children }: { children: React.ReactElement }): React.ReactElement => {
   const token = localStorage.getItem('auth_token');
   
   if (!token) {
@@ -229,7 +229,7 @@ const MainLayout = () => {
 };
 
 // Componente para redirecionar baseado no role
-const RoleRedirect = () => {
+const RoleRedirect = (): React.ReactElement => {
   const { user, isLoading } = useUser();
   
   if (isLoading) {
