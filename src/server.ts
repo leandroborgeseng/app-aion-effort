@@ -37,18 +37,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Servir arquivos estáticos de uploads
 app.use('/uploads', express.static('uploads'));
 
-// Servir arquivos estáticos do frontend em produção
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static('dist'));
-  app.get('*', (_req, res) => {
-    res.sendFile('index.html', { root: 'dist' });
-  });
-}
-
+// Health check (antes de tudo)
 app.get('/health', (_req, res) =>
   res.json({ ok: true, mock: process.env.USE_MOCK === 'true' })
 );
 
+// Rotas da API (devem vir ANTES do catch-all do frontend)
 app.use('/api/ecm/lifecycle', lifecycle);
 app.use('/api/ecm/critical', critical);
 app.use('/api/ecm/rounds', rounds);
@@ -100,6 +94,14 @@ app.get('/api/os/resumida', async (req, res) => {
     res.status(500).json({ error: true, message: e?.message });
   }
 });
+
+// Servir arquivos estáticos do frontend em produção (DEPOIS de todas as rotas da API)
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static('dist'));
+  app.get('*', (_req, res) => {
+    res.sendFile('index.html', { root: 'dist' });
+  });
+}
 
 const port = Number(process.env.PORT) || 4000;
 app.listen(port, () =>
