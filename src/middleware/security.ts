@@ -32,8 +32,9 @@ export const helmetConfig = helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Permitir módulos ES6 e inline scripts
       imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"], // Permitir requisições AJAX/fetch para o mesmo domínio
     },
   },
   crossOriginEmbedderPolicy: false, // Permitir recursos externos se necessário
