@@ -311,15 +311,33 @@ const qc = new QueryClient({
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
+  console.error('Root element not found!');
+  document.body.innerHTML = '<div style="padding: 20px; color: red;">Erro: Elemento root não encontrado!</div>';
   throw new Error('Root element not found');
 }
 
-createRoot(rootElement).render(
-  <React.StrictMode>
-    <QueryClientProvider client={qc}>
-      <UserProvider>
-        <AppRouter />
-      </UserProvider>
-    </QueryClientProvider>
-  </React.StrictMode>
-);
+console.log('Inicializando React app...');
+
+try {
+  createRoot(rootElement).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <QueryClientProvider client={qc}>
+          <UserProvider>
+            <AppRouter />
+          </UserProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+  console.log('React app inicializado com sucesso!');
+} catch (error) {
+  console.error('Erro ao inicializar React app:', error);
+  rootElement.innerHTML = `
+    <div style="padding: 20px; color: red; font-family: sans-serif;">
+      <h1>Erro ao carregar aplicação</h1>
+      <p>${error instanceof Error ? error.message : 'Erro desconhecido'}</p>
+      <pre style="background: #f5f5f5; padding: 10px; overflow: auto;">${error instanceof Error ? error.stack : String(error)}</pre>
+    </div>
+  `;
+}
