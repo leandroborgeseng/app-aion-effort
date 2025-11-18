@@ -8,13 +8,31 @@ services:
     container_name: aion-effort-backend
     ports:
       - "4000:4000"
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - USE_MOCK=false
-      - FRONTEND_URL=http://localhost:3000
+      - USE_MOCK=${USE_MOCK:-false}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - DATABASE_URL=file:./prisma/dev.db
       - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - EFFORT_BASE_URL=${EFFORT_BASE_URL}
+      - EFFORT_API_KEY=${EFFORT_API_KEY}
+      - API_PBI_REL_CRONO_MANU=${API_PBI_REL_CRONO_MANU}
+      - API_PBI_TIP_MANU=${API_PBI_TIP_MANU}
+      - API_PBI_REL_OS_ANALITICO=${API_PBI_REL_OS_ANALITICO}
+      - API_PBI_REL_OS_ANALITICO_RESUMIDO=${API_PBI_REL_OS_ANALITICO_RESUMIDO}
+      - API_PBI_REL_EQUIPAMENTOS=${API_PBI_REL_EQUIPAMENTOS}
+      - API_PBI_REL_TMEF=${API_PBI_REL_TMEF}
+      - API_PBI_REL_TPM=${API_PBI_REL_TPM}
+      - API_PBI_REL_DISP_EQUIPAMENTO=${API_PBI_REL_DISP_EQUIPAMENTO}
+      - API_PBI_REL_DISP_EQUIPAMENTO_MES=${API_PBI_REL_DISP_EQUIPAMENTO_MES}
+      - API_PBI_MONITOR_REACAO=${API_PBI_MONITOR_REACAO}
+      - API_PBI_MONITOR_ATENDIMENTO=${API_PBI_MONITOR_ATENDIMENTO}
+      - API_PBI_ANEXOS_EQUIPAMENTO=${API_PBI_ANEXOS_EQUIPAMENTO}
+      - API_PBI_ANEXOS_OS=${API_PBI_ANEXOS_OS}
+      - API_PBI_OFICINA=${API_PBI_OFICINA}
     volumes:
       # Persistir banco de dados
       - ./prisma/dev.db:/app/prisma/dev.db
