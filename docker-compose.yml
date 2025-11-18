@@ -35,9 +35,10 @@ services:
       - API_PBI_OFICINA=${API_PBI_OFICINA}
     volumes:
       # Persistir diretório prisma completo (para garantir que o diretório existe)
-      - ./prisma:/app/prisma
+      # Usar :Z no final para SELinux ou :rw para garantir escrita
+      - ./prisma:/app/prisma:rw
       # Persistir uploads
-      - ./uploads:/app/uploads
+      - ./uploads:/app/uploads:rw
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
