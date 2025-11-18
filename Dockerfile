@@ -48,8 +48,8 @@ COPY src ./src
 COPY prisma ./prisma
 COPY tsconfig.json ./
 
-# Gerar Prisma Client
-RUN pnpm prisma:generate
+# Gerar Prisma Client (ignorar checksum se servidor do Prisma estiver com problemas)
+RUN PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 pnpm prisma:generate
 
 # Stage 3: Aplicação final
 FROM node:20-slim
