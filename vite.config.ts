@@ -7,7 +7,13 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: false,
+    sourcemap: true, // Habilitar sourcemaps para debug
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: false, // Manter console.log para debug
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks: undefined,
