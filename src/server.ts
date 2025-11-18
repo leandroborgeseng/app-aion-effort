@@ -96,26 +96,42 @@ app.get('/api/os/resumida', async (req, res) => {
 });
 
 // Servir arquivos estáticos do frontend em produção (DEPOIS de todas as rotas da API)
+import path from 'path';
+import fs from 'fs';
+
 const nodeEnv = process.env.NODE_ENV || 'development';
+const distPath = path.join(process.cwd(), 'dist');
+
 console.log(`NODE_ENV: ${nodeEnv}`);
+console.log(`Frontend dist path: ${distPath}`);
 console.log(`Serving frontend: ${nodeEnv === 'production' ? 'YES' : 'NO'}`);
 
-if (nodeEnv === 'production') {
-  const path = require('path');
-  const distPath = path.join(process.cwd(), 'dist');
-  console.log(`Frontend dist path: ${distPath}`);
+// Sempre tentar servir frontend se dist existir (para produção e desenvolvimento)
+try {
+  const distExists = fs.existsSync(distPath);
+  console.log(`Dist directory exists: ${distExists}`);
   
-  // Servir arquivos estáticos
-  app.use(express.static(distPath));
-  
-  // Catch-all: retornar index.html para todas as rotas que não são API
-  app.get('*', (_req, res) => {
-    const indexPath = path.join(distPath, 'index.html');
-    console.log(`Serving index.html from: ${indexPath}`);
-    res.sendFile(indexPath);
-  });
-} else {
-  console.log('Frontend não será servido (modo desenvolvimento)');
+  if (distExists) {
+    // Servir arquivos estáticos do frontend
+    app.use(express.static(distPath));
+    console.log(`Frontend static files configured`);
+    
+    // Catch-all: retornar index.html para todas as rotas que não são API
+    app.get('*', (_req, res) => {
+      const indexPath = path.join(distPath, 'index.html');
+      console.log(`Serving index.html from: ${indexPath}`);
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          console.error(`Error serving index.html:`, err);
+          res.status(404).json({ error: 'Frontend not found' });
+        }
+      });
+    });
+  } else {
+    console.log('Dist directory not found - frontend will not be served');
+  }
+} catch (error) {
+  console.error('Error setting up frontend:', error);
 }
 
 const port = Number(process.env.PORT) || 4000;
