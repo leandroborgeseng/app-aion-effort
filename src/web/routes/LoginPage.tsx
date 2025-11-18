@@ -38,11 +38,17 @@ export default function LoginPage() {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginFormData) => {
-      return apiClient.post('/api/auth/login', credentials, { skipAuth: true });
+      console.log('[LoginPage] Tentando fazer login com:', credentials.email);
+      const response = await apiClient.post('/api/auth/login', credentials, { skipAuth: true });
+      console.log('[LoginPage] Resposta do servidor:', response);
+      return response;
     },
     onSuccess: (data: any) => {
+      console.log('[LoginPage] Login bem-sucedido, dados recebidos:', data);
+      
       // Verificar se a resposta tem token
       if (!data.token) {
+        console.error('[LoginPage] Resposta sem token:', data);
         toast.error('Resposta inválida do servidor');
         return;
       }
@@ -51,6 +57,7 @@ export default function LoginPage() {
       localStorage.setItem('auth_token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user || data));
       
+      console.log('[LoginPage] Token salvo no localStorage');
       toast.success('Login realizado com sucesso!');
       
       // Recarregar página para atualizar contexto do usuário
@@ -59,6 +66,7 @@ export default function LoginPage() {
       }, 500);
     },
     onError: (err: Error) => {
+      console.error('[LoginPage] Erro no login:', err);
       toast.error(err.message || 'Erro ao fazer login');
     },
   });
