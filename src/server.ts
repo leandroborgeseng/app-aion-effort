@@ -44,6 +44,38 @@ app.get('/health', (_req, res) =>
   res.json({ ok: true, mock: process.env.USE_MOCK === 'true' })
 );
 
+// Debug endpoint para verificar arquivos do frontend
+app.get('/debug/frontend', (_req, res) => {
+  const distPath = path.join(process.cwd(), 'dist');
+  const distExists = fs.existsSync(distPath);
+  
+  const info: any = {
+    distExists,
+    distPath,
+    nodeEnv: process.env.NODE_ENV,
+  };
+  
+  if (distExists) {
+    try {
+      const files = fs.readdirSync(distPath);
+      info.files = files;
+      
+      const indexPath = path.join(distPath, 'index.html');
+      info.indexExists = fs.existsSync(indexPath);
+      
+      if (fs.existsSync(path.join(distPath, 'assets'))) {
+        const assets = fs.readdirSync(path.join(distPath, 'assets'));
+        info.assets = assets;
+        info.assetsCount = assets.length;
+      }
+    } catch (e: any) {
+      info.error = e.message;
+    }
+  }
+  
+  res.json(info);
+});
+
 // Rotas da API (devem vir ANTES do catch-all do frontend)
 app.use('/api/ecm/lifecycle', lifecycle);
 app.use('/api/ecm/critical', critical);
