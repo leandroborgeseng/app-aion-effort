@@ -476,7 +476,6 @@ export default function CronogramaPage() {
                   alignItems: 'center',
                   cursor: 'default',
                   transition: 'all 0.2s',
-                  backgroundColor: theme.colors.gray[50],
                   borderColor: theme.colors.gray[200],
                 }}
                 onClick={() => {

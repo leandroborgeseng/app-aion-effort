@@ -16,7 +16,7 @@ import {
 } from 'react-icons/fi';
 import { theme } from '../styles/theme';
 import { formatBrazilianDateLong } from '../utils/dateUtils';
-import { getSectorIdFromItem, getSectorIdFromName } from '../../utils/sectorMapping';
+import { getSectorIdFromItem, getSectorIdFromName } from '../utils/sectorMapping';
 
 export default function RondasPage() {
   const [showInvestmentForm, setShowInvestmentForm] = useState<string | null>(null);
@@ -909,12 +909,11 @@ function CreateRoundForm({
                         alignItems: 'flex-start',
                         gap: theme.spacing.sm,
                         padding: theme.spacing.sm,
-                        backgroundColor: theme.colors.white,
+                        backgroundColor: selectedInvestments.includes(inv.id) ? `${theme.colors.primary}10` : theme.colors.white,
                         borderRadius: theme.borderRadius.xs,
                         border: `1px solid ${theme.colors.gray[200]}`,
                         cursor: 'pointer',
                         transition: 'all 0.2s',
-                        backgroundColor: selectedInvestments.includes(inv.id) ? `${theme.colors.primary}10` : theme.colors.white,
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.borderColor = theme.colors.primary;
