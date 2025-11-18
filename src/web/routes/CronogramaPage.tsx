@@ -476,7 +476,6 @@ export default function CronogramaPage() {
                   alignItems: 'center',
                   cursor: 'default',
                   transition: 'all 0.2s',
-                  borderColor: theme.colors.gray[200],
                 }}
                 onClick={() => {
                   // Removido - não filtra mais por tipo, apenas mostra informações

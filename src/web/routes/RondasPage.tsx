@@ -16,7 +16,7 @@ import {
 } from 'react-icons/fi';
 import { theme } from '../styles/theme';
 import { formatBrazilianDateLong } from '../utils/dateUtils';
-import { getSectorIdFromItem, getSectorIdFromName } from '../utils/sectorMapping';
+import { getSectorIdFromItem, getSectorIdFromName } from '../../utils/sectorMapping';
 
 export default function RondasPage() {
   const [showInvestmentForm, setShowInvestmentForm] = useState<string | null>(null);
