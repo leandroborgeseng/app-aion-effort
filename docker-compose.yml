@@ -15,7 +15,7 @@ services:
       - PORT=4000
       - USE_MOCK=${USE_MOCK:-false}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - DATABASE_URL=file:./prisma/dev.db
+      - DATABASE_URL=file:/app/prisma/dev.db
       - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
       - EFFORT_BASE_URL=${EFFORT_BASE_URL}
       - EFFORT_API_KEY=${EFFORT_API_KEY}
