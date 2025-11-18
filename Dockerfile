@@ -30,7 +30,7 @@ FROM node:20-alpine AS backend-builder
 WORKDIR /app
 
 # Instalar dependências do sistema necessárias para Prisma
-RUN apk add --no-cache openssl1.1-compat libc6-compat
+RUN apk add --no-cache openssl openssl-dev libc6-compat
 
 # Instalar pnpm
 RUN npm install -g pnpm
@@ -56,7 +56,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Instalar dependências do sistema necessárias para Prisma
-RUN apk add --no-cache openssl1.1-compat libc6-compat
+RUN apk add --no-cache openssl openssl-dev libc6-compat
 
 # Instalar pnpm
 RUN npm install -g pnpm
