@@ -96,11 +96,26 @@ app.get('/api/os/resumida', async (req, res) => {
 });
 
 // Servir arquivos estáticos do frontend em produção (DEPOIS de todas as rotas da API)
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static('dist'));
+const nodeEnv = process.env.NODE_ENV || 'development';
+console.log(`NODE_ENV: ${nodeEnv}`);
+console.log(`Serving frontend: ${nodeEnv === 'production' ? 'YES' : 'NO'}`);
+
+if (nodeEnv === 'production') {
+  const path = require('path');
+  const distPath = path.join(process.cwd(), 'dist');
+  console.log(`Frontend dist path: ${distPath}`);
+  
+  // Servir arquivos estáticos
+  app.use(express.static(distPath));
+  
+  // Catch-all: retornar index.html para todas as rotas que não são API
   app.get('*', (_req, res) => {
-    res.sendFile('index.html', { root: 'dist' });
+    const indexPath = path.join(distPath, 'index.html');
+    console.log(`Serving index.html from: ${indexPath}`);
+    res.sendFile(indexPath);
   });
+} else {
+  console.log('Frontend não será servido (modo desenvolvimento)');
 }
 
 const port = Number(process.env.PORT) || 4000;
