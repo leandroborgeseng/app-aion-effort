@@ -31,6 +31,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Debug: verificar se o script está sendo carregado
+      console.log('HTML carregado, aguardando script principal...');
+      window.addEventListener('error', function(e) {
+        console.error('Erro ao carregar script:', e.filename, e.message);
+      });
+    </script>
     <script type="module" src="/src/web/main.tsx"></script>
   </body>
 </html>

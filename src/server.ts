@@ -112,9 +112,11 @@ try {
   
   if (distExists) {
     // Servir arquivos estáticos do frontend (assets, imagens, etc)
+    // IMPORTANTE: Deve vir ANTES do catch-all para garantir que assets sejam servidos primeiro
     app.use(express.static(distPath, {
       maxAge: '1y',
       etag: true,
+      index: false, // Não servir index.html automaticamente, vamos fazer isso manualmente
     }));
     console.log(`Frontend static files configured from: ${distPath}`);
     
@@ -125,18 +127,31 @@ try {
       if (fs.existsSync(path.join(distPath, 'assets'))) {
         const assets = fs.readdirSync(path.join(distPath, 'assets'));
         console.log(`Assets found: ${assets.length} files`);
+        console.log(`Asset files: ${assets.slice(0, 5).join(', ')}${assets.length > 5 ? '...' : ''}`);
       }
     } catch (e) {
       console.log('Could not list dist files:', e);
     }
     
+    // Middleware para log de requisições de assets (debug)
+    app.use((req, res, next) => {
+      if (req.path.startsWith('/assets') || req.path.startsWith('/images')) {
+        console.log(`[STATIC] Serving: ${req.path}`);
+      }
+      next();
+    });
+    
     // Catch-all: retornar index.html para todas as rotas que não são API ou assets
     // IMPORTANTE: Deve ser a última rota registrada
-    // O express.static já serve os arquivos estáticos, então este catch-all só pega rotas não encontradas
     app.get('*', (req, res) => {
+      // Ignorar requisições para API (já tratadas antes)
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: 'API route not found' });
+      }
+      
       // Se chegou aqui, é uma rota do frontend (React Router)
       const indexPath = path.join(distPath, 'index.html');
-      console.log(`Serving index.html for route: ${req.path}`);
+      console.log(`[FRONTEND] Serving index.html for route: ${req.path}`);
       res.sendFile(indexPath, (err) => {
         if (err) {
           console.error(`Error serving index.html:`, err);
