@@ -111,12 +111,32 @@ try {
   console.log(`Dist directory exists: ${distExists}`);
   
   if (distExists) {
+    // Middleware para log e headers corretos ANTES de servir arquivos estáticos
+    app.use((req, res, next) => {
+      if (req.path.startsWith('/assets') || req.path.startsWith('/images')) {
+        console.log(`[STATIC] ${req.method} ${req.path}`);
+        // Garantir headers corretos para módulos ES6
+        if (req.path.endsWith('.js')) {
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        } else if (req.path.endsWith('.css')) {
+          res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        }
+      }
+      next();
+    });
+    
     // Servir arquivos estáticos do frontend (assets, imagens, etc)
     // IMPORTANTE: Deve vir ANTES do catch-all para garantir que assets sejam servidos primeiro
     app.use(express.static(distPath, {
       maxAge: '1y',
       etag: true,
       index: false, // Não servir index.html automaticamente, vamos fazer isso manualmente
+      setHeaders: (res, filePath) => {
+        // Garantir headers corretos para módulos ES6
+        if (filePath.endsWith('.js')) {
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        }
+      },
     }));
     console.log(`Frontend static files configured from: ${distPath}`);
     
@@ -132,14 +152,6 @@ try {
     } catch (e) {
       console.log('Could not list dist files:', e);
     }
-    
-    // Middleware para log de requisições de assets (debug)
-    app.use((req, res, next) => {
-      if (req.path.startsWith('/assets') || req.path.startsWith('/images')) {
-        console.log(`[STATIC] Serving: ${req.path}`);
-      }
-      next();
-    });
     
     // Catch-all: retornar index.html para todas as rotas que não são API ou assets
     // IMPORTANTE: Deve ser a última rota registrada
