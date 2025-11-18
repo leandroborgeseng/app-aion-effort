@@ -1,0 +1,53 @@
+{
+  "sectors": [
+    {
+      "name": "Ambulatório",
+      "id": 12
+    },
+    {
+      "name": "Cardiologia",
+      "id": 7
+    },
+    {
+      "name": "Centro Cirúrgico",
+      "id": 5
+    },
+    {
+      "name": "Emergência",
+      "id": 4
+    },
+    {
+      "name": "Maternidade",
+      "id": 11
+    },
+    {
+      "name": "Neurologia",
+      "id": 8
+    },
+    {
+      "name": "Ortopedia",
+      "id": 9
+    },
+    {
+      "name": "Pediatria",
+      "id": 10
+    },
+    {
+      "name": "Radiologia",
+      "id": 6
+    },
+    {
+      "name": "UTI 1",
+      "id": 1
+    },
+    {
+      "name": "UTI 2",
+      "id": 2
+    },
+    {
+      "name": "UTI 3",
+      "id": 3
+    }
+  ],
+  "total": 12
+}

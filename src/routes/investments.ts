@@ -1,0 +1,696 @@
+// src/routes/investments.ts
+import { Router } from 'express';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+const USE_MOCK = process.env.USE_MOCK === 'true';
+
+// Lazy load Prisma apenas quando necessário (modo não-mock)
+let prisma: any = null;
+async function getPrisma() {
+  if (!prisma && !USE_MOCK) {
+    const { PrismaClient } = await import('@prisma/client');
+    prisma = new PrismaClient();
+  }
+  return prisma;
+}
+
+export const investments = Router();
+
+// Caminho absoluto para o arquivo de mock
+const MOCK_FILE = path.join(process.cwd(), 'mocks', 'investments.json');
+
+// Ler investimentos do mock
+async function readMockInvestments() {
+  try {
+    const buf = await fs.readFile(MOCK_FILE, 'utf-8');
+    const parsed = JSON.parse(buf);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err: any) {
+    console.error('Erro ao ler investimentos do mock:', err?.message);
+    // Se o arquivo não existe, retorna array vazio
+    if (err?.code === 'ENOENT') {
+      return [];
+    }
+    return [];
+  }
+}
+
+// Salvar investimentos no mock
+async function saveMockInvestments(data: any[]) {
+  try {
+    // Garantir que o diretório existe
+    const dir = path.dirname(MOCK_FILE);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(MOCK_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err: any) {
+    console.error('Erro ao salvar investimentos no mock:', err?.message);
+    throw err;
+  }
+}
+
+// GET /api/ecm/investments - Listar investimentos
+investments.get('/', async (req, res) => {
+  try {
+    const { status, categoria, sectorRoundId, sectorId } = req.query;
+
+      if (USE_MOCK) {
+        let investments = await readMockInvestments();
+        
+        if (status) {
+          investments = investments.filter((inv: any) => inv.status === status);
+        }
+        if (categoria) {
+          investments = investments.filter((inv: any) => inv.categoria === categoria);
+        }
+        if (sectorRoundId) {
+          investments = investments.filter((inv: any) => inv.sectorRoundId === sectorRoundId);
+        }
+        if (sectorId) {
+          const sectorIdNum = Number(sectorId);
+          const { getSectorIdFromName } = await import('../utils/sectorMapping');
+          
+          // Filtrar por sectorId direto OU pelo nome do setor usando getSectorIdFromName
+          // Isso garante compatibilidade mesmo se os IDs não corresponderem exatamente
+          investments = investments.filter((inv: any) => {
+            if (inv.sectorId === sectorIdNum) return true;
+            // Se o sectorId não corresponde, tentar pelo nome do setor
+            if (inv.setor) {
+              const invSectorId = getSectorIdFromName(inv.setor);
+              return invSectorId === sectorIdNum;
+            }
+            return false;
+          });
+        }
+
+        // Garantir que valorEstimado seja número
+        const normalizedInvestments = investments.map((inv: any) => ({
+          ...inv,
+          valorEstimado: typeof inv.valorEstimado === 'string' 
+            ? parseFloat(inv.valorEstimado.replace(/[^\d.,-]/g, '').replace(',', '.')) 
+            : (inv.valorEstimado ? Number(inv.valorEstimado) : null),
+        }));
+
+        res.json(normalizedInvestments);
+    } else {
+      const prismaClient = await getPrisma();
+      if (!prismaClient) {
+        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+      }
+
+      const where: any = {};
+      if (status) where.status = status;
+      if (categoria) where.categoria = categoria;
+      if (sectorRoundId) where.sectorRoundId = sectorRoundId;
+      
+      // Buscar todos os investimentos primeiro (sem filtro de sectorId no where)
+      let data = await prismaClient.investment.findMany({
+        where,
+        include: {
+          sectorRound: {
+            select: {
+              id: true,
+              sectorName: true,
+              weekStart: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      
+      // Aplicar filtro de sectorId se fornecido (usando o mesmo método usado para equipamentos e OS)
+      if (sectorId) {
+        const sectorIdNum = Number(sectorId);
+        const { getSectorIdFromName } = await import('../utils/sectorMapping');
+        
+        data = data.filter((inv: any) => {
+          // Verificar pelo sectorId direto
+          if (inv.sectorId === sectorIdNum) return true;
+          // Se não corresponde, tentar pelo nome do setor usando getSectorIdFromName
+          if (inv.setor) {
+            const invSectorId = getSectorIdFromName(inv.setor);
+            return invSectorId === sectorIdNum;
+          }
+          return false;
+        });
+      }
+
+      // Converter Decimal para número (Prisma retorna Decimal como string)
+      const normalizedData = data.map((inv: any) => ({
+        ...inv,
+        valorEstimado: inv.valorEstimado ? Number(inv.valorEstimado) : null,
+      }));
+
+      res.json(normalizedData);
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: true, message: e?.message });
+  }
+});
+
+// GET /api/ecm/investments/:id - Buscar investimento por ID
+investments.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (USE_MOCK) {
+      const investments = await readMockInvestments();
+      const investment = investments.find((inv: any) => inv.id === id);
+      if (!investment) {
+        return res.status(404).json({ error: true, message: 'Investimento não encontrado' });
+      }
+      // Garantir que valorEstimado seja número
+      const normalizedInvestment = {
+        ...investment,
+        valorEstimado: typeof investment.valorEstimado === 'string' 
+          ? parseFloat(investment.valorEstimado.replace(/[^\d.,-]/g, '').replace(',', '.')) 
+          : (investment.valorEstimado ? Number(investment.valorEstimado) : null),
+      };
+      res.json(normalizedInvestment);
+    } else {
+      const prismaClient = await getPrisma();
+      if (!prismaClient) {
+        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+      }
+
+      const investment = await prismaClient.investment.findUnique({
+        where: { id },
+        include: {
+          sectorRound: {
+            select: {
+              id: true,
+              sectorName: true,
+              weekStart: true,
+            },
+          },
+        },
+      });
+
+      if (!investment) {
+        return res.status(404).json({ error: true, message: 'Investimento não encontrado' });
+      }
+
+      // Converter Decimal para número
+      const normalizedInvestment = {
+        ...investment,
+        valorEstimado: investment.valorEstimado ? Number(investment.valorEstimado) : null,
+      };
+
+      res.json(normalizedInvestment);
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: true, message: e?.message });
+  }
+});
+
+// POST /api/ecm/investments - Criar investimento
+investments.post('/', async (req, res) => {
+  try {
+    const {
+      titulo,
+      descricao,
+      categoria,
+      valorEstimado,
+      prioridade,
+      status = 'Proposto',
+      setor,
+      sectorId,
+      responsavel,
+      dataPrevista,
+      observacoes,
+      sectorRoundId,
+    } = req.body;
+
+    if (!titulo || !categoria || !valorEstimado || !prioridade) {
+      return res.status(400).json({ error: true, message: 'Campos obrigatórios: titulo, categoria, valorEstimado, prioridade' });
+    }
+
+    if (USE_MOCK) {
+      const investments = await readMockInvestments();
+      const newInvestment = {
+        id: `inv-${Date.now()}`,
+        titulo,
+        descricao: descricao || null,
+        categoria,
+        valorEstimado: parseFloat(valorEstimado),
+        prioridade,
+        status,
+        setor: setor || null,
+        sectorId: sectorId ? Number(sectorId) : null,
+        responsavel: responsavel || null,
+        dataPrevista: dataPrevista || null,
+        observacoes: observacoes || null,
+        sectorRoundId: sectorRoundId || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      investments.push(newInvestment);
+      await saveMockInvestments(investments);
+
+      res.status(201).json(newInvestment);
+    } else {
+      const prismaClient = await getPrisma();
+      if (!prismaClient) {
+        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+      }
+
+      const investment = await prismaClient.investment.create({
+        data: {
+          titulo,
+          descricao,
+          categoria,
+          valorEstimado: parseFloat(valorEstimado),
+          prioridade,
+          status,
+          setor,
+          responsavel,
+          dataPrevista: dataPrevista ? new Date(dataPrevista) : null,
+          observacoes,
+          sectorRoundId,
+        },
+        include: {
+          sectorRound: {
+            select: {
+              id: true,
+              sectorName: true,
+              weekStart: true,
+            },
+          },
+        },
+      });
+
+      // Converter Decimal para número
+      const normalizedInvestment = {
+        ...investment,
+        valorEstimado: investment.valorEstimado ? Number(investment.valorEstimado) : null,
+      };
+
+      res.status(201).json(normalizedInvestment);
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: true, message: e?.message });
+  }
+});
+
+// PATCH /api/ecm/investments/:id - Atualizar investimento
+investments.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+      const {
+      titulo,
+      descricao,
+      categoria,
+      valorEstimado,
+      prioridade,
+      status,
+      setor,
+      sectorId,
+      responsavel,
+      dataPrevista,
+      observacoes,
+      sectorRoundId,
+    } = req.body;
+
+    if (USE_MOCK) {
+      const investments = await readMockInvestments();
+      const index = investments.findIndex((inv: any) => inv.id === id);
+      if (index === -1) {
+        return res.status(404).json({ error: true, message: 'Investimento não encontrado' });
+      }
+
+      const updated = {
+        ...investments[index],
+        ...(titulo !== undefined && { titulo }),
+        ...(descricao !== undefined && { descricao }),
+        ...(categoria !== undefined && { categoria }),
+        ...(valorEstimado !== undefined && { valorEstimado: parseFloat(valorEstimado) }),
+        ...(prioridade !== undefined && { prioridade }),
+        ...(status !== undefined && { status }),
+        ...(setor !== undefined && { setor }),
+        ...(sectorId !== undefined && { sectorId: sectorId ? Number(sectorId) : null }),
+        ...(responsavel !== undefined && { responsavel }),
+        ...(dataPrevista !== undefined && { dataPrevista }),
+        ...(observacoes !== undefined && { observacoes }),
+        ...(sectorRoundId !== undefined && { sectorRoundId }),
+        updatedAt: new Date().toISOString(),
+      };
+
+      investments[index] = updated;
+      await saveMockInvestments(investments);
+
+      res.json(updated);
+    } else {
+      const prismaClient = await getPrisma();
+      if (!prismaClient) {
+        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+      }
+
+      const updateData: any = {};
+      if (titulo !== undefined) updateData.titulo = titulo;
+      if (descricao !== undefined) updateData.descricao = descricao;
+      if (categoria !== undefined) updateData.categoria = categoria;
+      if (valorEstimado !== undefined) updateData.valorEstimado = parseFloat(valorEstimado);
+      if (prioridade !== undefined) updateData.prioridade = prioridade;
+      if (status !== undefined) updateData.status = status;
+      if (setor !== undefined) updateData.setor = setor;
+      if (sectorId !== undefined) updateData.sectorId = sectorId ? Number(sectorId) : null;
+      if (responsavel !== undefined) updateData.responsavel = responsavel;
+      if (dataPrevista !== undefined) updateData.dataPrevista = dataPrevista ? new Date(dataPrevista) : null;
+      if (observacoes !== undefined) updateData.observacoes = observacoes;
+      if (sectorRoundId !== undefined) updateData.sectorRoundId = sectorRoundId;
+
+      const investment = await prismaClient.investment.update({
+        where: { id },
+        data: updateData,
+        include: {
+          sectorRound: {
+            select: {
+              id: true,
+              sectorName: true,
+              weekStart: true,
+            },
+          },
+        },
+      });
+
+      // Converter Decimal para número
+      const normalizedInvestment = {
+        ...investment,
+        valorEstimado: investment.valorEstimado ? Number(investment.valorEstimado) : null,
+      };
+
+      res.json(normalizedInvestment);
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: true, message: e?.message });
+  }
+});
+
+// DELETE /api/ecm/investments/:id - Deletar investimento
+investments.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (USE_MOCK) {
+      const investments = await readMockInvestments();
+      const filtered = investments.filter((inv: any) => inv.id !== id);
+      if (filtered.length === investments.length) {
+        return res.status(404).json({ error: true, message: 'Investimento não encontrado' });
+      }
+      await saveMockInvestments(filtered);
+      res.json({ success: true });
+    } else {
+      const prismaClient = await getPrisma();
+      if (!prismaClient) {
+        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+      }
+
+      await prismaClient.investment.delete({
+        where: { id },
+      });
+
+      res.json({ success: true });
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: true, message: e?.message });
+  }
+});
+
+// GET /api/ecm/investments/from-round/:roundId - Buscar investimentos de uma ronda
+investments.get('/from-round/:roundId', async (req, res) => {
+  try {
+    const { roundId } = req.params;
+
+    if (USE_MOCK) {
+      const investments = await readMockInvestments();
+      const filtered = investments.filter((inv: any) => inv.sectorRoundId === roundId);
+      // Garantir que valorEstimado seja número
+      const normalizedFiltered = filtered.map((inv: any) => ({
+        ...inv,
+        valorEstimado: typeof inv.valorEstimado === 'string' 
+          ? parseFloat(inv.valorEstimado.replace(/[^\d.,-]/g, '').replace(',', '.')) 
+          : (inv.valorEstimado ? Number(inv.valorEstimado) : null),
+      }));
+      res.json(normalizedFiltered);
+    } else {
+      const prismaClient = await getPrisma();
+      if (!prismaClient) {
+        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+      }
+
+      const data = await prismaClient.investment.findMany({
+        where: { sectorRoundId: roundId },
+        include: {
+          sectorRound: {
+            select: {
+              id: true,
+              sectorName: true,
+              weekStart: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Converter Decimal para número
+      const normalizedData = data.map((inv: any) => ({
+        ...inv,
+        valorEstimado: inv.valorEstimado ? Number(inv.valorEstimado) : null,
+      }));
+
+      res.json(normalizedData);
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: true, message: e?.message });
+  }
+});
+
+// POST /api/ecm/investments/import - Importar investimentos em lote
+investments.post('/import', async (req, res) => {
+  try {
+    const { investments: investmentsList, dryRun = false } = req.body;
+
+    if (!Array.isArray(investmentsList)) {
+      return res.status(400).json({ error: true, message: 'O corpo da requisição deve conter um array "investments"' });
+    }
+
+    // Importar utilitário de mapeamento
+    const { mapInvestmentsSectors, getSectorMappingReport } = await import('../utils/investmentSectorMapper');
+    
+    // Mapear setores (a função retorna Promise<Array>)
+    const mappedInvestments = await mapInvestmentsSectors(investmentsList);
+    const mappingReport = await getSectorMappingReport(investmentsList);
+
+    if (dryRun) {
+      // Modo dry-run: apenas retornar o relatório de mapeamento
+      return res.json({
+        success: true,
+        dryRun: true,
+        mappingReport,
+        investments: mappedInvestments,
+        summary: {
+          total: investmentsList.length,
+          mapped: mappingReport.mapped.length,
+          unmapped: mappingReport.unmapped.length,
+        },
+      });
+    }
+
+    // Importar investimentos
+    const results = {
+      created: [] as any[],
+      errors: [] as Array<{ investment: any; error: string }>,
+    };
+
+    if (USE_MOCK) {
+      const existingInvestments = await readMockInvestments();
+      const newInvestments = mappedInvestments.map((inv, idx) => ({
+        id: `inv-${Date.now()}-${idx}`,
+        titulo: inv.titulo || inv.TITULO || inv['DESCRIÇÃO (EQUIPAMENTOS)'] || 'Sem título',
+        descricao: inv.descricao || inv.DESCRICAO || inv.justificativa || inv.Justificativa || null,
+        categoria: inv.categoria || inv.CATEGORIA || 'Equipamento',
+        valorEstimado: parseFloat(String(inv.valorEstimado || inv.valorTotal || inv['Valor total'] || inv['Valor total'] || '0').replace(/[^\d,.-]/g, '').replace(',', '.')),
+        prioridade: inv.prioridade || inv.PRIORIDADE || 'Média',
+        status: inv.status || inv.STATUS || 'Proposto',
+        setor: inv.setor || inv.SETOR || null,
+        sectorId: inv.sectorId || null,
+        responsavel: inv.responsavel || inv.RESPONSAVEL || null,
+        dataPrevista: inv.dataPrevista || inv.DATA_PREVISTA || null,
+        observacoes: inv.observacoes || inv.OBSERVACOES || inv.justificativa || inv.Justificativa || `Qtd: ${inv.Qtd || inv.qtd || ''}` || null,
+        sectorRoundId: inv.sectorRoundId || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+
+      existingInvestments.push(...newInvestments);
+      await saveMockInvestments(existingInvestments);
+      results.created = newInvestments;
+    } else {
+      const prismaClient = await getPrisma();
+      if (!prismaClient) {
+        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+      }
+
+      for (const inv of mappedInvestments) {
+        try {
+          const investment = await prismaClient.investment.create({
+            data: {
+              titulo: inv.titulo || inv.TITULO || inv['DESCRIÇÃO (EQUIPAMENTOS)'] || 'Sem título',
+              descricao: inv.descricao || inv.DESCRICAO || inv.justificativa || inv.Justificativa || null,
+              categoria: inv.categoria || inv.CATEGORIA || 'Equipamento',
+              valorEstimado: parseFloat(String(inv.valorEstimado || inv.valorTotal || inv['Valor total'] || inv['Valor total'] || '0').replace(/[^\d,.-]/g, '').replace(',', '.')),
+              prioridade: inv.prioridade || inv.PRIORIDADE || 'Média',
+              status: inv.status || inv.STATUS || 'Proposto',
+              setor: inv.setor || inv.SETOR || null,
+              sectorId: inv.sectorId || null,
+              responsavel: inv.responsavel || inv.RESPONSAVEL || null,
+              dataPrevista: (inv.dataPrevista || inv.DATA_PREVISTA) ? new Date(inv.dataPrevista || inv.DATA_PREVISTA) : null,
+              observacoes: inv.observacoes || inv.OBSERVACOES || inv.justificativa || inv.Justificativa || `Qtd: ${inv.Qtd || inv.qtd || ''}` || null,
+              sectorRoundId: inv.sectorRoundId || null,
+            },
+          });
+          results.created.push(investment);
+        } catch (error: any) {
+          results.errors.push({
+            investment: inv,
+            error: error?.message || 'Erro desconhecido',
+          });
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      mappingReport,
+      results,
+      summary: {
+        total: investmentsList.length,
+        created: results.created.length,
+        errors: results.errors.length,
+        mapped: mappingReport.mapped.length,
+        unmapped: mappingReport.unmapped.length,
+      },
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: true, message: e?.message });
+  }
+});
+
+// GET /api/ecm/investments/sectors/mapping-report - Obter relatório de mapeamento de setores
+investments.get('/sectors/mapping-report', async (req, res) => {
+  try {
+    const { getSectorMappingReport } = await import('../utils/investmentSectorMapper');
+    
+    // Buscar investimentos existentes
+    let investments: any[] = [];
+    if (USE_MOCK) {
+      investments = await readMockInvestments();
+    } else {
+      const prismaClient = await getPrisma();
+      if (prismaClient) {
+        investments = await prismaClient.investment.findMany({
+          select: { setor: true },
+        });
+      }
+    }
+    
+    const report = await getSectorMappingReport(investments);
+    res.json(report);
+  } catch (e: any) {
+    res.status(500).json({ error: true, message: e?.message });
+  }
+});
+
+// GET /api/ecm/investments/sectors/list - Listar todos os setores disponíveis na API
+investments.get('/sectors/list', async (req, res) => {
+  try {
+    // Usar o mapeamento fixo de setores que já temos
+    const INVESTMENT_SECTOR_MAPPING: Record<string, number> = {
+      'PEDIATRIA': 10,
+      'UTI 2': 2,
+      'UTI 1': 1,
+      'UTI 3': 3,
+      'CENTRO CIRÚRGICO': 5,
+      'Centro Cirúrgico': 5,
+      'CENTRO CIRÚRGICO - 10A': 5,
+      'Centro Cirúrgico Ambulatorial': 5,
+      'UNIDADE DE EMERGÊNCIA': 4,
+      'UTI/UNIDADE DE EMERGÊNCIA': 4,
+      'Emergência': 4,
+      'TOMOGRAFIA': 6,
+      'TOMOGRAFIA 2': 6,
+      'RESSONÂNCIA MAGNÉTICA': 6,
+      'RESSONANCIA MAGNÉTICA': 6,
+      'ULTRASSONOGRAFIA': 6,
+      'HEMODINÂMICA': 7,
+      'HEMODINAMICA': 7,
+      'CDC': 7,
+      'BERÇÁRIO': 11,
+      'BERÇARIO': 11,
+      'UTI NEONATAL E PEDIÁTRICA': 1,
+      'UTI Neonatal e Pediátrica': 1,
+      'UTI INFANTIL - 8': 1,
+      'UTI INFANTIL-8': 1,
+      'UTI ADULTO I': 1,
+      'UTI Adulto I': 1,
+      'UNIDADES DE INTERNAÇÃO': 12,
+      'EDUCAÇÃO CORPORATIVA': 12,
+      'Educação Corporativa': 12,
+      'CME': 5,
+      'ENDOSCOPIA': 5,
+      'MANUTENÇÃO': 12,
+      'MANUTENCAO': 12,
+      'ROUPARIA': 12,
+      'UNIDADE 1': 12,
+      'Unidade 1': 12,
+      'CENTRO CIRÚRGICO AMBULATORIAL': 5,
+      'Centro Cirúrgico Ambulatorial': 5,
+    };
+
+    // Setores básicos do sistema (prioridade)
+    const basicSectors: Record<number, string> = {
+      1: 'UTI 1',
+      2: 'UTI 2',
+      3: 'UTI 3',
+      4: 'Emergência',
+      5: 'Centro Cirúrgico',
+      6: 'Radiologia',
+      7: 'Cardiologia',
+      8: 'Neurologia',
+      9: 'Ortopedia',
+      10: 'Pediatria',
+      11: 'Maternidade',
+      12: 'Ambulatório',
+    };
+
+    // Criar um mapa de IDs únicos para nomes únicos, começando com setores básicos
+    const sectorIdToName: Record<number, string> = { ...basicSectors };
+    
+    // Adicionar setores específicos de investimentos que não estão nos básicos
+    // (mantendo os nomes básicos como prioridade)
+    Object.entries(INVESTMENT_SECTOR_MAPPING).forEach(([name, id]) => {
+      // Só adicionar se não existir um nome básico para esse ID
+      if (!basicSectors[id]) {
+        // Se já existe um nome para esse ID, manter o primeiro (mais específico)
+        if (!sectorIdToName[id]) {
+          sectorIdToName[id] = name;
+        }
+      }
+    });
+
+    // Converter para array ordenado
+    const sectors = Object.entries(sectorIdToName)
+      .map(([idStr, name]) => ({ id: parseInt(idStr), name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+    res.json({
+      success: true,
+      total: sectors.length,
+      sectors,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: true, message: e?.message });
+  }
+});
+

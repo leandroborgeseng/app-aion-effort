@@ -1,0 +1,406 @@
+{
+  "monthlyKpis": {
+    "1001": [
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 1,
+        "uptimePercent": 97.73,
+        "horasFuncionando": 713.42,
+        "horasParado": 16.58,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 2,
+        "uptimePercent": 98.96,
+        "horasFuncionando": 722.39,
+        "horasParado": 7.61,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 3,
+        "uptimePercent": 99,
+        "horasFuncionando": 722.7,
+        "horasParado": 7.3,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 4,
+        "uptimePercent": 98.69,
+        "horasFuncionando": 720.46,
+        "horasParado": 9.54,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 5,
+        "uptimePercent": 97.81,
+        "horasFuncionando": 714.03,
+        "horasParado": 15.97,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 6,
+        "uptimePercent": 96.92,
+        "horasFuncionando": 707.48,
+        "horasParado": 22.52,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 7,
+        "uptimePercent": 96.77,
+        "horasFuncionando": 706.42,
+        "horasParado": 23.58,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 8,
+        "uptimePercent": 95,
+        "horasFuncionando": 693.5,
+        "horasParado": 36.5,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 9,
+        "uptimePercent": 95,
+        "horasFuncionando": 693.5,
+        "horasParado": 36.5,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 10,
+        "uptimePercent": 95,
+        "horasFuncionando": 693.5,
+        "horasParado": 36.5,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 11,
+        "uptimePercent": 95,
+        "horasFuncionando": 693.5,
+        "horasParado": 36.5,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1001,
+        "tag": "RADIO-CT-01",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 12,
+        "uptimePercent": 95.79,
+        "horasFuncionando": 699.23,
+        "horasParado": 30.77,
+        "horasTotais": 730
+      }
+    ],
+    "1002": [
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 1,
+        "uptimePercent": 98.5,
+        "horasFuncionando": 719.08,
+        "horasParado": 10.92,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 2,
+        "uptimePercent": 98.39,
+        "horasFuncionando": 718.25,
+        "horasParado": 11.75,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 3,
+        "uptimePercent": 98.4,
+        "horasFuncionando": 718.35,
+        "horasParado": 11.65,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 4,
+        "uptimePercent": 99,
+        "horasFuncionando": 722.7,
+        "horasParado": 7.3,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 5,
+        "uptimePercent": 97.37,
+        "horasFuncionando": 710.8,
+        "horasParado": 19.2,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 6,
+        "uptimePercent": 97.69,
+        "horasFuncionando": 713.15,
+        "horasParado": 16.85,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 7,
+        "uptimePercent": 95.83,
+        "horasFuncionando": 699.54,
+        "horasParado": 30.46,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 8,
+        "uptimePercent": 95.84,
+        "horasFuncionando": 699.67,
+        "horasParado": 30.33,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 9,
+        "uptimePercent": 95.1,
+        "horasFuncionando": 694.24,
+        "horasParado": 35.76,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 10,
+        "uptimePercent": 95.57,
+        "horasFuncionando": 697.63,
+        "horasParado": 32.37,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 11,
+        "uptimePercent": 95.12,
+        "horasFuncionando": 694.38,
+        "horasParado": 35.62,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1002,
+        "tag": "RADIO-CT-02",
+        "equipamento": "Tomógrafo Computadorizado",
+        "year": 2025,
+        "month": 12,
+        "uptimePercent": 96.43,
+        "horasFuncionando": 703.94,
+        "horasParado": 26.06,
+        "horasTotais": 730
+      }
+    ],
+    "1003": [
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 1,
+        "uptimePercent": 98.27,
+        "horasFuncionando": 717.34,
+        "horasParado": 12.66,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 2,
+        "uptimePercent": 97.9,
+        "horasFuncionando": 714.64,
+        "horasParado": 15.36,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 3,
+        "uptimePercent": 99,
+        "horasFuncionando": 722.7,
+        "horasParado": 7.3,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 4,
+        "uptimePercent": 98.66,
+        "horasFuncionando": 720.22,
+        "horasParado": 9.78,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 5,
+        "uptimePercent": 98.59,
+        "horasFuncionando": 719.68,
+        "horasParado": 10.32,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 6,
+        "uptimePercent": 97.95,
+        "horasFuncionando": 715.04,
+        "horasParado": 14.96,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 7,
+        "uptimePercent": 95.95,
+        "horasFuncionando": 700.44,
+        "horasParado": 29.56,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 8,
+        "uptimePercent": 95.1,
+        "horasFuncionando": 694.22,
+        "horasParado": 35.78,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 9,
+        "uptimePercent": 95.42,
+        "horasFuncionando": 696.6,
+        "horasParado": 33.4,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 10,
+        "uptimePercent": 95,
+        "horasFuncionando": 693.5,
+        "horasParado": 36.5,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 11,
+        "uptimePercent": 95.66,
+        "horasFuncionando": 698.34,
+        "horasParado": 31.66,
+        "horasTotais": 730
+      },
+      {
+        "effortId": 1003,
+        "tag": "RADIO-RM-01",
+        "equipamento": "Ressonância Magnética",
+        "year": 2025,
+        "month": 12,
+        "uptimePercent": 97.32,
+        "horasFuncionando": 710.43,
+        "horasParado": 19.57,
+        "horasTotais": 730
+      }
+    ]
+  }
+}

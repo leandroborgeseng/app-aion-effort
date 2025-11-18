@@ -1,0 +1,55 @@
+[
+  {
+    "id": "contract-001",
+    "nome": "Contrato Full Service - Equipamentos de Imagem",
+    "fornecedor": "Siemens Healthineers",
+    "equipamentoIds": "[1001,1002,1003,1005,1006]",
+    "tipoContrato": "Full Service",
+    "valorAnual": "850000.00",
+    "dataInicio": "2025-01-01T00:00:00",
+    "dataFim": "2025-12-31T23:59:59",
+    "renovacaoAutomatica": true,
+    "ativo": true,
+    "observacoes": "Cobertura completa para CTs, RM e RX"
+  },
+  {
+    "id": "contract-002",
+    "nome": "Contrato Preventiva - Ventiladores",
+    "fornecedor": "Magnamed",
+    "equipamentoIds": "[1001]",
+    "tipoContrato": "Preventiva",
+    "valorAnual": "45000.00",
+    "dataInicio": "2025-01-01T00:00:00",
+    "dataFim": "2025-12-31T23:59:59",
+    "renovacaoAutomatica": false,
+    "ativo": true,
+    "observacoes": "Manutenção preventiva trimestral"
+  },
+  {
+    "id": "contract-003",
+    "nome": "Contrato Misto - UTI",
+    "fornecedor": "Philips Healthcare",
+    "equipamentoIds": "[1003,1004]",
+    "tipoContrato": "Misto",
+    "valorAnual": "120000.00",
+    "dataInicio": "2025-01-01T00:00:00",
+    "dataFim": "2025-12-31T23:59:59",
+    "renovacaoAutomatica": true,
+    "ativo": true,
+    "observacoes": "Monitores e desfibriladores UTI"
+  },
+  {
+    "id": "contract-004",
+    "nome": "Contrato Corretiva - Centro Cirúrgico",
+    "fornecedor": "Maquet",
+    "equipamentoIds": "[1008]",
+    "tipoContrato": "Corretiva",
+    "valorAnual": "35000.00",
+    "dataInicio": "2025-06-01T00:00:00",
+    "dataFim": "2026-05-31T23:59:59",
+    "renovacaoAutomatica": false,
+    "ativo": true,
+    "observacoes": "Suporte técnico para mesas cirúrgicas"
+  }
+]
+

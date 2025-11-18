@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: aion-effort-app-dev
+    ports:
+      - "4000:4000"
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - USE_MOCK=${USE_MOCK:-false}
+      - FRONTEND_URL=http://localhost:5173
+      - DATABASE_URL=file:./prisma/dev.db
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-key}
+    volumes:
+      # Montar código fonte para hot reload
+      - .:/app
+      - /app/node_modules
+      - /app/.pnpm-store
+      # Persistir banco de dados
+      - ./prisma/dev.db:/app/prisma/dev.db
+      # Persistir uploads
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    command: sh -c "pnpm dev & pnpm web"
+

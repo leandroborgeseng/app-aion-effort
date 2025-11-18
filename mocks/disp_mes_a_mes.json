@@ -1,0 +1,47 @@
+[
+  {
+    "EmpresaId": 2,
+    "EquipamentoId": 1001,
+    "Tag": "UTI2-VEN-01",
+    "EquipamentoDescricaoCompleta": "Ventilador Pulmonar - Magnamed OXI-3000",
+    "PlanoDeDescricaoId": 11,
+    "PlanoDeDescricao": "Ventilador Pulmonar",
+    "ModeloId": 31,
+    "ModeloDescricao": "OXI-3000",
+    "FabricanteId": 7,
+    "Fabricante": "Magnamed",
+    "CriticidadeId": 1,
+    "Criticidade": "Alta",
+    "SetorId": 101,
+    "SetorCodigo": "UTI2",
+    "SetorDescricao": "UTI 2",
+    "NumeroDeSerie": "SN-ABC-001",
+    "DisponibilidadeMensal": [
+      {
+        "Ano": 2025,
+        "Mes": 9,
+        "DisponibilidadePercentual": 99.5,
+        "TMPR": 2.1,
+        "TMEF": 720.0,
+        "DiasParado": 0.2,
+        "DiasFuncionando": 29.8
+      },
+      {
+        "Ano": 2025,
+        "Mes": 10,
+        "DisponibilidadePercentual": 98.6,
+        "TMPR": 3.0,
+        "TMEF": 650.0,
+        "DiasParado": 0.4,
+        "DiasFuncionando": 30.6
+      }
+    ],
+    "DisponibilidadePercentualPeriodo": 99.05,
+    "TMEF": 685.0,
+    "TMPR": 2.55,
+    "DiasDoPeriodo": 60,
+    "DiasParado": 0.6,
+    "DiasFuncionando": 59.4
+  }
+]
+

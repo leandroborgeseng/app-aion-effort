@@ -1,0 +1,375 @@
+[
+  {
+    "setor": "HEMODINÂMICA",
+    "titulo": "Aparelho de Hemodinamica",
+    "valorEstimado": 2640000.0,
+    "descricao": "Possível substituição do aparelho que está instalado no hospital."
+  },
+  {
+    "setor": "TOMOGRAFIA",
+    "titulo": "Tomógrafo 64 canais",
+    "valorEstimado": 2145000.0,
+    "descricao": "Atualização tecnológica"
+  },
+  {
+    "setor": "TOMOGRAFIA 2",
+    "titulo": "Bomba de Infusão",
+    "valorEstimado": 160000.0,
+    "descricao": "Reforço operacional _ aplicação de contratsres na TC 2"
+  },
+  {
+    "setor": "RESSONÂNCIA MAGNÉTICA",
+    "titulo": "APARELHO DE ANESTESIA P/ RESSONANCIA MAGNÉTICA = MODELO SAT MRI COM 01 VAPORIZADOR CALIBRADO - MARCA KTK",
+    "valorEstimado": 388000.0,
+    "descricao": "Atender demanda de RNM com sedação "
+  },
+  {
+    "setor": "ULTRASSONOGRAFIA",
+    "titulo": "US SAMSUNG S40",
+    "valorEstimado": 170000.0,
+    "descricao": "Expansão diagnóstica, substutuindo o molelo Siemens de baixa adesão"
+  },
+  {
+    "setor": "BERÇÁRIO",
+    "titulo": "Bilitrons",
+    "valorEstimado": 52000.0,
+    "descricao": "Tratamento de icterícia neonatal"
+  },
+  {
+    "setor": "PEDIATRIA",
+    "titulo": "Venoscopio",
+    "valorEstimado": 42000.0,
+    "descricao": ""
+  },
+  {
+    "setor": "PEDIATRIA",
+    "titulo": "Ultrasson Point of Care - lumify phillips - aplicativo instalação após aquisição",
+    "valorEstimado": 39000.0,
+    "descricao": "Melhorar punções de difícil acesso_equipe em treinamento"
+  },
+  {
+    "setor": "UNIDADES DE INTERNAÇÃO",
+    "titulo": "CAMAS  ELÉTRICAS",
+    "valorEstimado": 588000.0,
+    "descricao": "Geradas pelo sistema: End of Service ( 14 pediatria, 16 maternidade, 10 clínica, 2 ala 2)"
+  },
+  {
+    "setor": "UNIDADES DE INTERNAÇÃO",
+    "titulo": "Monitor de Sinais Vitais com PNI, SpO2 (Nellcor), Termometria (SureTemp®) e Conectividade (Cabo/Wi-Fi)",
+    "valorEstimado": 39200.0,
+    "descricao": "Tem MEWS, PILS (Baxter)"
+  },
+  {
+    "setor": "UNIDADES DE INTERNAÇÃO",
+    "titulo": "Carro Móvel Welch Allyn",
+    "valorEstimado": 5800.0,
+    "descricao": "Tem MEWS, PILS (Baxter)"
+  },
+  {
+    "setor": "UNIDADES DE INTERNAÇÃO",
+    "titulo": "Monitores",
+    "valorEstimado": 112000.0,
+    "descricao": "Necessidade setorial, padronização e atendimento obstétrico na maternidade"
+  },
+  {
+    "setor": "UNIDADES DE INTERNAÇÃO",
+    "titulo": "Carrinhos beira leitos com 6 gavetas",
+    "valorEstimado": null,
+    "descricao": "1 para back-up (abertura de leitos reversíveis) e 1 para ala clínica"
+  },
+  {
+    "setor": "UTI Neonatal e Pediátrica",
+    "titulo": "unidades hibrida de cuidado intensivo - marca Fanem - modelo Dueto 2386",
+    "valorEstimado": 141794.0,
+    "descricao": "Foi comprada uma, na planilha original estavam requisitadas 3 unidades, retirei uma e mantive duas."
+  },
+  {
+    "setor": "UTI Neonatal e Pediátrica",
+    "titulo": "Fototerapia Bilitron Sky 5006 – Fanem",
+    "valorEstimado": 28000.0,
+    "descricao": "Equipamentos ultrapassados"
+  },
+  {
+    "setor": "UTI Neonatal e Pediátrica",
+    "titulo": "Sstema de Hipotermia",
+    "valorEstimado": 275000.0,
+    "descricao": ""
+  },
+  {
+    "setor": "UTI Neonatal e Pediátrica",
+    "titulo": "Incubadora 1186C – Fanem",
+    "valorEstimado": 234000.0,
+    "descricao": "Defeitos recorrentes, precisa renovar (R$ 58.000,00 valor normal - R$ 39.000,00 fazendo trade-in)"
+  },
+  {
+    "setor": "UTI Adulto I",
+    "titulo": "Monitor de débito cardíaco",
+    "valorEstimado": 36000.0,
+    "descricao": "Atender requisitos normativos"
+  },
+  {
+    "setor": "UTI 2",
+    "titulo": "Bipap",
+    "valorEstimado": 18000.0,
+    "descricao": ""
+  },
+  {
+    "setor": "UTI/UNIDADE DE EMERGÊNCIA",
+    "titulo": "V scan Air CL GE",
+    "valorEstimado": 39000.0,
+    "descricao": "Para procedimentos de necessitam de visualização rápida para agilizar a tomada de decisão em urgência e UTIs"
+  },
+  {
+    "setor": "UNIDADE DE EMERGÊNCIA",
+    "titulo": "OXIMETRO DE TRANSPORTE",
+    "valorEstimado": 2500.0,
+    "descricao": "solicitação do setor"
+  },
+  {
+    "setor": "UNIDADE DE EMERGÊNCIA",
+    "titulo": "Cilindro de oxignio de aluminio",
+    "valorEstimado": null,
+    "descricao": "São mais leve e facilita muito o transporte principalmente em cadeiras de rodas."
+  },
+  {
+    "setor": "UNIDADE DE EMERGÊNCIA",
+    "titulo": "Monitor Cardiaco para Transporte",
+    "valorEstimado": 16000.0,
+    "descricao": "Minimizar riscos no transporte de pacientes graves. "
+  },
+  {
+    "setor": "UNIDADE DE EMERGÊNCIA",
+    "titulo": "Monitores para os leitos da sala de emergência",
+    "valorEstimado": 28000.0,
+    "descricao": "Substituição dos que estão atualmente e que pelo tempo de uso já estão compremitidos, colocar modelos que realizem integração com o sistema."
+  },
+  {
+    "setor": "UNIDADE DE EMERGÊNCIA",
+    "titulo": "Berços com grade",
+    "valorEstimado": 84000.0,
+    "descricao": "Substituição dos berços que estão danificados e sem condições de receber manutenção."
+  },
+  {
+    "setor": "Educação Corporativa",
+    "titulo": "Manequim Bissexual Adulto c/ orgãos internos",
+    "valorEstimado": 4100.0,
+    "descricao": "Educação corporativa"
+  },
+  {
+    "setor": "Educação Corporativa",
+    "titulo": "Manequim Bissexual Infantil_3 a 5 anos c/ orgãos internos",
+    "valorEstimado": 6600.0,
+    "descricao": "Educação corporativa"
+  },
+  {
+    "setor": "Unidade 1",
+    "titulo": "Cardioversor elétrico",
+    "valorEstimado": 28000.0,
+    "descricao": "Suprir a unidade que compartilha com a pediatria"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO",
+    "titulo": "Conjuntos de coxins em gel",
+    "valorEstimado": null,
+    "descricao": "Prevenção de TEV"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO",
+    "titulo": "Mantas térmicas (colchão)",
+    "valorEstimado": 3800.0,
+    "descricao": "Movimentação entre salas"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO",
+    "titulo": "Botas pneumáticas",
+    "valorEstimado": 13600.0,
+    "descricao": "Apoio anestésico"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO",
+    "titulo": "Mesas cirúrgicas radiotransparentes",
+    "valorEstimado": 148000.0,
+    "descricao": "Substituíção das antigas e que dão defeito"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO",
+    "titulo": "Vácuo portátil",
+    "valorEstimado": null,
+    "descricao": ""
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO",
+    "titulo": "Foco auxiliar",
+    "valorEstimado": 24000.0,
+    "descricao": "Demanda de iluminação"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO",
+    "titulo": "Gabinete de aquecimento de soro",
+    "valorEstimado": 8000.0,
+    "descricao": "Protocolo de hipotermia"
+  },
+  {
+    "setor": "CME",
+    "titulo": "Computadores completos",
+    "valorEstimado": null,
+    "descricao": "Gestão de materiais"
+  },
+  {
+    "setor": "CME",
+    "titulo": "Caixas de cesárea novas",
+    "valorEstimado": 8962.0,
+    "descricao": "Renovação"
+  },
+  {
+    "setor": "CME",
+    "titulo": "Caixas de peças de cesárea (36 peças cada)",
+    "valorEstimado": 46602.4,
+    "descricao": "Manutenção"
+  },
+  {
+    "setor": "CME",
+    "titulo": "Bandejas de vídeo colecistectomia",
+    "valorEstimado": 46376.0,
+    "descricao": "Suprir urgências"
+  },
+  {
+    "setor": "CME",
+    "titulo": "Kits simples (13 peças cada)",
+    "valorEstimado": 75000.0,
+    "descricao": "Cirurgias de baixa complexidade"
+  },
+  {
+    "setor": "CME",
+    "titulo": "Perfuradores de mão a bateria Stryker",
+    "valorEstimado": 310000.0,
+    "descricao": "Renovação de parque"
+  },
+  {
+    "setor": "ENDOSCOPIA",
+    "titulo": "Colono Olympus CF-H170L",
+    "valorEstimado": 102000.0,
+    "descricao": "Renovação e ampliação do parque"
+  },
+  {
+    "setor": "ENDOSCOPIA",
+    "titulo": "Endoscópio Olympus GIF-Q170",
+    "valorEstimado": 98000.0,
+    "descricao": "Renovação e ampliação do parque"
+  },
+  {
+    "setor": "ENDOSCOPIA",
+    "titulo": "kit de pistolas Atemo",
+    "valorEstimado": 4800.0,
+    "descricao": "Falta em uma das salas de higienizção"
+  },
+  {
+    "setor": "MANUTENÇÃO",
+    "titulo": "Veículo utilitario (modelo strada - usada)",
+    "valorEstimado": 50000.0,
+    "descricao": "O carro utilizado nos dias atuais precisa de conserto previsto em R$ 31.000,00"
+  },
+  {
+    "setor": "ROUPARIA",
+    "titulo": "Seladora de pedal com temporizador 60cm",
+    "valorEstimado": 1800.0,
+    "descricao": "Substituição da seladora do setor que tem apresentado problemas com frequencia"
+  },
+  {
+    "setor": "ROUPARIA",
+    "titulo": "Maquina de costura Overlock (Singer -de 04 a 06 tipos de ponto)",
+    "valorEstimado": 4000.0,
+    "descricao": "Substituição da maquina que pelo tempo de uso não é encontrado mais peça para conserto d"
+  },
+  {
+    "setor": "CDC",
+    "titulo": "Pacote software aparelho Philips sala 3",
+    "valorEstimado": 65000.0,
+    "descricao": "Atualização do sftware"
+  },
+  {
+    "setor": "CDC",
+    "titulo": "Sonda para eco transesofágico",
+    "valorEstimado": 154000.0,
+    "descricao": "Necessidade de segunda sonda"
+  },
+  {
+    "setor": "CDC",
+    "titulo": "Transdutor portatil para realização do POCUS ",
+    "valorEstimado": 39000.0,
+    "descricao": "US portátil point of care beira leito"
+  },
+  {
+    "setor": "UTI INFANTIL - 8",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 0.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "UTI INFANTIL - 8",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 0.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "Centro Cirúrgico",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 42000.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "Centro Cirúrgico",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 42000.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "Centro Cirúrgico Ambulatorial",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 28000.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO - 10A",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 14000.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO - 10A",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 14000.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO - 10A",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 14000.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO - 10A",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 14000.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO - 10A",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 14000.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO - 10A",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 14000.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  },
+  {
+    "setor": "CENTRO CIRÚRGICO - 10A",
+    "titulo": "MONITOR MULTIPARÂMETROS",
+    "valorEstimado": 14000.0,
+    "descricao": "Projeto de integracao substituicao para compaibilidade"
+  }
+]
+

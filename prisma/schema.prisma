@@ -1,0 +1,268 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model HttpCache {
+  key       String   @id
+  payload   Bytes
+  createdAt DateTime @default(now())
+}
+
+model RequestLog {
+  id         String   @id @default(cuid())
+  method     String
+  path       String
+  qs         String
+  status     Int
+  durationMs Int
+  createdAt  DateTime @default(now())
+}
+
+model EquipmentFlag {
+  id                String    @id @default(cuid())
+  effortId          Int       @unique
+  replaceFlag       Boolean   @default(false)
+  replaceReason     String?
+  replaceNotes      String?
+  inspected         Boolean   @default(false)
+  inspectedAt       DateTime?
+  inspectedBy       String?
+  substCost         Decimal?
+  substCostSource   String? // 'API'|'MANUAL'
+  eolDate           DateTime?
+  eosDate           DateTime?
+  anvisaReg         String?
+  anvisaValidity    DateTime?
+  criticalFlag      Boolean   @default(false)
+  monitoredFlag     Boolean   @default(false)
+  slaTargetAvailPct Int       @default(98)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([effortId], name: "idx_equipmentflag_effortId")
+  @@index([criticalFlag])
+  @@index([monitoredFlag])
+}
+
+model EquipmentFlagAudit {
+  id        String   @id @default(cuid())
+  effortId  Int
+  field     String
+  oldValue  String?
+  newValue  String?
+  actor     String?
+  createdAt DateTime @default(now())
+
+  @@index([effortId, createdAt])
+}
+
+model SectorRound {
+  id                 String   @id @default(cuid())
+  sectorId           Int
+  sectorName         String
+  weekStart          DateTime
+  responsibleId      String
+  responsibleName    String?
+  openOsCount        Int      @default(0)
+  closedOsCount      Int      @default(0)
+  notes              String?
+  purchaseRequestIds String?
+  osIds              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  investments Investment[] @relation("InvestmentSectorRound")
+
+  @@unique([sectorId, weekStart])
+  @@index([weekStart])
+  @@index([sectorId])
+}
+
+model PurchaseRequest {
+  id          String   @id @default(cuid())
+  sectorId    Int
+  description String
+  status      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  name          String
+  password      String       // Hash bcrypt da senha
+  role          String       // 'admin' | 'comum' | 'gerente'
+  active        Boolean      @default(true)
+  canImpersonate Boolean    @default(false) // Pode personificar outros usuários
+  lastLogin     DateTime?    // Último login
+  loginAttempts Int         @default(0) // Tentativas de login falhadas
+  lockedUntil   DateTime?   // Bloqueado até (para rate limiting)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  sectors       UserSector[]
+  managedUsers  UserManager[] @relation("Manager")
+  managedBy     UserManager[] @relation("ManagedUser")
+  impersonationLogs ImpersonationLog[] @relation("ImpersonatedBy")
+  impersonatedByLogs ImpersonationLog[] @relation("ImpersonatedUser")
+  sessions      Session[]    // Sessões ativas
+}
+
+model UserSector {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sectorId  Int
+  sectorName String? // Cache do nome do setor
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, sectorId])
+  @@index([userId])
+  @@index([sectorId])
+}
+
+model UserManager {
+  id        String   @id @default(cuid())
+  managerId String   // ID do gerente
+  manager   User     @relation("Manager", fields: [managerId], references: [id], onDelete: Cascade)
+  userId    String   // ID do usuário gerenciado
+  user      User     @relation("ManagedUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  
+  @@unique([managerId, userId])
+  @@index([managerId])
+  @@index([userId])
+}
+
+model ImpersonationLog {
+  id              String   @id @default(cuid())
+  supervisorId    String
+  supervisor      User     @relation("ImpersonatedBy", fields: [supervisorId], references: [id])
+  impersonatedUserId String
+  impersonatedUser User    @relation("ImpersonatedUser", fields: [impersonatedUserId], references: [id])
+  startedAt       DateTime @default(now())
+  endedAt         DateTime?
+  reason          String?
+}
+
+model EquipmentKpiMonthly {
+  id           String   @id @default(cuid())
+  effortId     Int
+  year         Int
+  month        Int
+  availability Float
+  slaAttendPct Float?
+  slaSolvePct  Float?
+  mtbfHours    Float?
+  mttrHours    Float?
+  createdAt    DateTime @default(now())
+
+  @@unique([effortId, year, month])
+  @@index([year, month])
+}
+
+model MaintenanceContract {
+  id                  String   @id @default(cuid())
+  nome                String
+  fornecedor          String
+  equipamentoIds      String // JSON array de IDs ou "TODOS"
+  tipoContrato        String // "Preventiva" | "Corretiva" | "Misto" | "Full Service"
+  valorAnual          Decimal
+  dataInicio          DateTime
+  dataFim             DateTime
+  renovacaoAutomatica Boolean  @default(false)
+  ativo               Boolean  @default(true)
+  descricao           String?  // Descrição detalhada do contrato
+  arquivoUrl          String?  // URL do arquivo do contrato (upload)
+  arquivoNome         String?  // Nome original do arquivo
+  observacoes         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([dataInicio, dataFim])
+  @@index([ativo])
+}
+
+model Investment {
+  id            String       @id @default(cuid())
+  titulo        String
+  descricao     String?
+  categoria     String
+  valorEstimado Decimal
+  prioridade    String
+  status        String
+  setor         String?
+  sectorId      Int?
+  responsavel   String?
+  dataPrevista  DateTime?
+  observacoes   String?
+  sectorRoundId String?
+  sectorRound   SectorRound? @relation("InvestmentSectorRound", fields: [sectorRoundId], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([status])
+  @@index([categoria])
+  @@index([sectorRoundId])
+  @@index([sectorId])
+  @@index([createdAt])
+}
+
+model Alert {
+  id             String    @id @default(cuid())
+  effortId       Int
+  tag            String
+  equipamento    String
+  osCodigo       String
+  osCodigoSerial Int
+  tipo           String // 'os_aberta' | 'os_atrasada' | 'manutencao_preventiva'
+  prioridade     String // 'baixa' | 'media' | 'alta' | 'critica'
+  mensagem       String
+  dataAbertura   DateTime
+  situacao       String // 'pendente' | 'visualizada' | 'resolvida'
+  visualizadaEm  DateTime?
+  visualizadaPor String?
+  resolvidaEm    DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([effortId])
+  @@index([situacao])
+  @@index([createdAt])
+}
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  category    String   // 'maintenance_type' | 'os_status' | etc.
+  key         String   // Nome do tipo/status (ex: 'Corretiva', 'Preventiva')
+  value       String   // Valor da configuração (ex: 'corretiva', 'preventiva')
+  metadata    String?  // JSON com informações adicionais
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([category, key])
+  @@index([category])
+  @@index([active])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique // JWT token
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}

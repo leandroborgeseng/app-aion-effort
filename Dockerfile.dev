@@ -1,0 +1,29 @@
+# Dockerfile para desenvolvimento
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Instalar pnpm
+RUN npm install -g pnpm
+
+# Copiar arquivos de dependências
+COPY package.json pnpm-lock.yaml ./
+
+# Instalar todas as dependências (incluindo devDependencies)
+RUN pnpm install --frozen-lockfile
+
+# Copiar código fonte
+COPY . .
+
+# Gerar Prisma Client
+RUN pnpm prisma:generate
+
+# Criar diretórios necessários
+RUN mkdir -p uploads/contracts
+
+# Expor portas (backend e frontend)
+EXPOSE 4000 5173
+
+# Comando padrão (pode ser sobrescrito no docker-compose)
+CMD ["sh", "-c", "pnpm dev & pnpm web"]
+
