@@ -55,7 +55,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile && \
     pnpm store prune
 
-# Copiar arquivos necessários
+# Copiar arquivos necessários (como root para ter permissões)
 COPY --from=backend-builder /app/src ./src
 COPY --from=backend-builder /app/prisma ./prisma
 COPY --from=backend-builder /app/scripts ./scripts
@@ -68,6 +68,9 @@ RUN echo "Gerando Prisma Client no stage final..." && \
       (PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 pnpm prisma:generate && exit 0) && break || \
       (echo "Tentativa $i falhou, aguardando 15 segundos..." && sleep 15); \
     done
+
+# Verificar se scripts foram copiados (debug)
+RUN ls -la scripts/ || echo "Scripts não encontrados"
 
 # Criar diretórios necessários
 RUN mkdir -p uploads/contracts && \
