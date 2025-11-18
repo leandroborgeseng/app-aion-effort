@@ -34,8 +34,8 @@ services:
       - API_PBI_ANEXOS_OS=${API_PBI_ANEXOS_OS}
       - API_PBI_OFICINA=${API_PBI_OFICINA}
     volumes:
-      # Persistir banco de dados
-      - ./prisma/dev.db:/app/prisma/dev.db
+      # Persistir diretório prisma completo (para garantir que o diretório existe)
+      - ./prisma:/app/prisma
       # Persistir uploads
       - ./uploads:/app/uploads
     restart: unless-stopped

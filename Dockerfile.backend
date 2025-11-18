@@ -73,8 +73,9 @@ RUN echo "Gerando Prisma Client no stage final..." && \
 RUN ls -la scripts/ || echo "Scripts não encontrados"
 
 # Criar diretórios necessários
-RUN mkdir -p uploads/contracts && \
-    chown -R nodejs:nodejs /app
+RUN mkdir -p uploads/contracts prisma && \
+    chown -R nodejs:nodejs /app && \
+    chmod 755 /app/prisma
 
 # Mudar para usuário não-root
 USER nodejs
