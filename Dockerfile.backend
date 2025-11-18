@@ -59,17 +59,13 @@ COPY --from=backend-builder /app/src ./src
 COPY --from=backend-builder /app/prisma ./prisma
 COPY tsconfig.json ./
 
-# Gerar Prisma Client no stage final (se não foi gerado antes)
-RUN if [ -d "/app/node_modules/.prisma" ]; then \
-      echo "Prisma Client já existe"; \
-    else \
-      echo "Gerando Prisma Client no stage final..."; \
-      for i in 1 2 3; do \
-        echo "Tentativa $i..." && \
-        (PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 pnpm prisma:generate && exit 0) && break || \
-        (echo "Tentativa $i falhou, aguardando 15 segundos..." && sleep 15); \
-      done; \
-    fi
+# Gerar Prisma Client no stage final (ANTES de mudar para usuário não-root)
+RUN echo "Gerando Prisma Client no stage final..." && \
+    for i in 1 2 3; do \
+      echo "Tentativa $i..." && \
+      (PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 pnpm prisma:generate && exit 0) && break || \
+      (echo "Tentativa $i falhou, aguardando 15 segundos..." && sleep 15); \
+    done
 
 # Criar diretórios necessários
 RUN mkdir -p uploads/contracts && \
