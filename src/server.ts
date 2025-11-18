@@ -20,8 +20,9 @@ import { helmetConfig, apiLimiter } from './middleware/security';
 
 const app = express();
 
-// Trust proxy (necessário quando atrás de proxy reverso como Nginx)
-app.set('trust proxy', true);
+// Trust proxy (confiar apenas no primeiro proxy - Nginx)
+// Isso é necessário para rate limiting funcionar corretamente atrás do proxy
+app.set('trust proxy', 1);
 
 // Segurança HTTP
 app.use(helmetConfig);
