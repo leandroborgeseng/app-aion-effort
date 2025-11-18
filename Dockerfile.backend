@@ -20,6 +20,7 @@ RUN pnpm install --frozen-lockfile
 # Copiar código fonte do backend
 COPY src ./src
 COPY prisma ./prisma
+COPY scripts ./scripts
 COPY tsconfig.json ./
 
 # Gerar Prisma Client com múltiplas tentativas e retry
@@ -57,6 +58,7 @@ RUN pnpm install --frozen-lockfile && \
 # Copiar arquivos necessários
 COPY --from=backend-builder /app/src ./src
 COPY --from=backend-builder /app/prisma ./prisma
+COPY --from=backend-builder /app/scripts ./scripts
 COPY tsconfig.json ./
 
 # Gerar Prisma Client no stage final (ANTES de mudar para usuário não-root)
