@@ -2,6 +2,8 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
 import { lifecycle } from './routes/lifecycle';
 import { critical } from './routes/critical';
 import { rounds } from './routes/rounds';
@@ -96,9 +98,6 @@ app.get('/api/os/resumida', async (req, res) => {
 });
 
 // Servir arquivos estáticos do frontend em produção (DEPOIS de todas as rotas da API)
-import path from 'path';
-import fs from 'fs';
-
 const nodeEnv = process.env.NODE_ENV || 'development';
 const distPath = path.join(process.cwd(), 'dist');
 
