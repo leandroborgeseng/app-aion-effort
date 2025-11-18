@@ -6,7 +6,7 @@ dist
 
 # Database
 #*.db
-#*.db-journal
+*.db-journal
 #prisma/dev.db
 prisma/dev.db-journal
 

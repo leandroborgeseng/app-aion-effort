@@ -1,0 +1,81 @@
+# ============================================
+# CONFIGURAÇÃO DA APLICAÇÃO
+# ============================================
+NODE_ENV=production
+PORT=4000
+USE_MOCK=false
+FRONTEND_URL=http://localhost:4000
+
+# ============================================
+# BANCO DE DADOS
+# ============================================
+DATABASE_URL=file:./prisma/dev.db
+
+# ============================================
+# SEGURANÇA
+# ============================================
+# IMPORTANTE: Altere esta chave para uma chave forte e única em produção!
+# Gere uma chave segura com: openssl rand -base64 32
+JWT_SECRET=your-secret-key-change-in-production-use-a-strong-random-string
+
+# ============================================
+# API EFFORT/POWERBI - CONFIGURAÇÃO BASE
+# ============================================
+EFFORT_BASE_URL=https://sjh.globalthings.net
+EFFORT_API_KEY=your-generic-api-key-here
+
+# ============================================
+# API EFFORT/POWERBI - TOKENS ESPECÍFICOS POR ENDPOINT
+# ============================================
+# Veja API_TOKENS.md para mais detalhes sobre cada token
+
+# Cronograma de Manutenção
+API_PBI_REL_CRONO_MANU=364c3a59-c2fe-4bf9-83db-05d0be8604f3
+
+# Tipo de Manutenção
+API_PBI_TIP_MANU=2d9b3530-6251-4582-a695-78525c2a6638
+
+# Relatório OS Analítico
+API_PBI_REL_OS_ANALITICO=eef00891-6e7e-463f-802a-5f8997bd9ef6
+
+# Relatório OS Analítico Resumido
+API_PBI_REL_OS_ANALITICO_RESUMIDO=684d9802-9662-4a15-8650-67bbe831f14a
+
+# Equipamentos
+API_PBI_REL_EQUIPAMENTOS=a2e17293-6fa9-419d-aa46-aa60d7270fd7
+
+# Tempo Médio Entre Falhas (TMEF)
+API_PBI_REL_TMEF=592f42ea-f8a2-485d-97ea-066167caeb03
+
+# Tempo de Parada Médio (TPM)
+API_PBI_REL_TPM=a3334250-b891-408a-b972-9ea5b82e2ce8
+
+# Disponibilidade de Equipamento
+API_PBI_REL_DISP_EQUIPAMENTO=0f2d6e2d-a437-45db-ba5c-6d4ed27aaacc
+
+# Disponibilidade de Equipamento Mês a Mês
+API_PBI_REL_DISP_EQUIPAMENTO_MES=2f5749b4-92a4-491b-a15c-bfce75871d6b
+
+# Monitor de Reação
+API_PBI_MONITOR_REACAO=a8ef213d-0855-4cbb-aa45-07a191a094cc
+
+# Monitor de Atendimento
+API_PBI_MONITOR_ATENDIMENTO=22c02c8d-ce6a-4106-9f77-a7e3acd2c4dc
+
+# Anexos de Equipamento
+API_PBI_ANEXOS_EQUIPAMENTO=8ceace83-c78c-4bd4-8e64-a9467b1e7b1f
+
+# Anexos de OS
+API_PBI_ANEXOS_OS=4877b643-c07e-41df-b87c-67e6bec0d425
+
+# Oficina
+API_PBI_OFICINA=4a884654-cdbf-473e-a63d-84af91ac030f
+
+# ============================================
+# CONFIGURAÇÕES DE MOCK (APENAS PARA DESENVOLVIMENTO)
+# ============================================
+# Descomente as linhas abaixo se quiser usar modo mock
+# MOCK_SEED=12345
+# MOCK_COMPANY_IDS=2
+# MOCK_SECTORS=101,102
+

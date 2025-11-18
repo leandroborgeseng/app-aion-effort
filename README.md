@@ -69,8 +69,10 @@ Para fazer deploy em outra máquina usando Docker:
    docker-compose exec app pnpm create:admin
    ```
 
-📖 **Veja o guia completo:** [`DEPLOY.md`](DEPLOY.md)  
-🐳 **Documentação Docker:** [`README.DOCKER.md`](README.DOCKER.md)
+📖 **Guia completo de deploy:** [`DEPLOY.md`](DEPLOY.md)  
+🚀 **Deploy no servidor:** [`DEPLOY_SERVIDOR.md`](DEPLOY_SERVIDOR.md) | [`DEPLOY_RAPIDO.md`](DEPLOY_RAPIDO.md)  
+🐳 **Documentação Docker:** [`README.DOCKER.md`](README.DOCKER.md)  
+📦 **Migração de dados:** [`MIGRACAO_DADOS.md`](MIGRACAO_DADOS.md) | [`MIGRACAO_RAPIDA.md`](MIGRACAO_RAPIDA.md)
 
 ## Variáveis de Ambiente Necessárias
 
