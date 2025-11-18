@@ -132,15 +132,9 @@ try {
     
     // Catch-all: retornar index.html para todas as rotas que não são API ou assets
     // IMPORTANTE: Deve ser a última rota registrada
-    app.get('*', (req, res, next) => {
-      // Ignorar requisições para API, assets e uploads
-      if (req.path.startsWith('/api') || 
-          req.path.startsWith('/assets') || 
-          req.path.startsWith('/uploads') ||
-          req.path.startsWith('/images')) {
-        return next();
-      }
-      
+    // O express.static já serve os arquivos estáticos, então este catch-all só pega rotas não encontradas
+    app.get('*', (req, res) => {
+      // Se chegou aqui, é uma rota do frontend (React Router)
       const indexPath = path.join(distPath, 'index.html');
       console.log(`Serving index.html for route: ${req.path}`);
       res.sendFile(indexPath, (err) => {
