@@ -1,7 +1,7 @@
 # Dockerfile multi-stage para otimizar o build
 
 # Stage 1: Build do frontend
-FROM node:20-alpine AS frontend-builder
+FROM node:20-slim AS frontend-builder
 
 WORKDIR /app
 
@@ -25,12 +25,14 @@ COPY public ./public
 RUN pnpm build
 
 # Stage 2: Build do backend e aplicação final
-FROM node:20-alpine AS backend-builder
+FROM node:20-slim AS backend-builder
 
 WORKDIR /app
 
 # Instalar dependências do sistema necessárias para Prisma
-RUN apk add --no-cache openssl openssl-dev libc6-compat
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends openssl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 # Instalar pnpm
 RUN npm install -g pnpm
@@ -46,17 +48,18 @@ COPY src ./src
 COPY prisma ./prisma
 COPY tsconfig.json ./
 
-# Gerar Prisma Client (com fallback para ignorar checksum se necessário)
-RUN PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 pnpm prisma:generate || \
-    pnpm prisma:generate
+# Gerar Prisma Client
+RUN pnpm prisma:generate
 
 # Stage 3: Aplicação final
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
 # Instalar dependências do sistema necessárias para Prisma
-RUN apk add --no-cache openssl openssl-dev libc6-compat
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends openssl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 # Instalar pnpm
 RUN npm install -g pnpm
