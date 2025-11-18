@@ -48,8 +48,15 @@ COPY src ./src
 COPY prisma ./prisma
 COPY tsconfig.json ./
 
-# Gerar Prisma Client (ignorar checksum se servidor do Prisma estiver com problemas)
-RUN PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 pnpm prisma:generate
+# Gerar Prisma Client com múltiplas tentativas e retry
+# O servidor do Prisma pode estar temporariamente indisponível
+RUN for i in 1 2 3 4 5; do \
+      echo "Tentativa $i de gerar Prisma Client..." && \
+      (PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 pnpm prisma:generate && exit 0) && break || \
+      (echo "Tentativa $i falhou, aguardando 10 segundos..." && sleep 10); \
+    done || \
+    (echo "Todas as tentativas falharam. Tentando com binários pré-instalados..." && \
+     PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 PRISMA_SKIP_POSTINSTALL_GENERATE=1 pnpm prisma:generate)
 
 # Stage 3: Aplicação final
 FROM node:20-slim
