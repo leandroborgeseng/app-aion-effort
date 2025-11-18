@@ -111,18 +111,42 @@ try {
   console.log(`Dist directory exists: ${distExists}`);
   
   if (distExists) {
-    // Servir arquivos estáticos do frontend
-    app.use(express.static(distPath));
-    console.log(`Frontend static files configured`);
+    // Servir arquivos estáticos do frontend (assets, imagens, etc)
+    app.use(express.static(distPath, {
+      maxAge: '1y',
+      etag: true,
+    }));
+    console.log(`Frontend static files configured from: ${distPath}`);
     
-    // Catch-all: retornar index.html para todas as rotas que não são API
-    app.get('*', (_req, res) => {
+    // Listar arquivos no dist para debug
+    try {
+      const files = fs.readdirSync(distPath);
+      console.log(`Files in dist: ${files.join(', ')}`);
+      if (fs.existsSync(path.join(distPath, 'assets'))) {
+        const assets = fs.readdirSync(path.join(distPath, 'assets'));
+        console.log(`Assets found: ${assets.length} files`);
+      }
+    } catch (e) {
+      console.log('Could not list dist files:', e);
+    }
+    
+    // Catch-all: retornar index.html para todas as rotas que não são API ou assets
+    // IMPORTANTE: Deve ser a última rota registrada
+    app.get('*', (req, res, next) => {
+      // Ignorar requisições para API, assets e uploads
+      if (req.path.startsWith('/api') || 
+          req.path.startsWith('/assets') || 
+          req.path.startsWith('/uploads') ||
+          req.path.startsWith('/images')) {
+        return next();
+      }
+      
       const indexPath = path.join(distPath, 'index.html');
-      console.log(`Serving index.html from: ${indexPath}`);
+      console.log(`Serving index.html for route: ${req.path}`);
       res.sendFile(indexPath, (err) => {
         if (err) {
           console.error(`Error serving index.html:`, err);
-          res.status(404).json({ error: 'Frontend not found' });
+          res.status(404).json({ error: 'Frontend not found', path: req.path });
         }
       });
     });
