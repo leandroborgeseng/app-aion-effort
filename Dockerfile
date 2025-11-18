@@ -84,9 +84,21 @@ RUN pnpm install --frozen-lockfile && \
 # Copiar arquivos necessários
 COPY --from=backend-builder /app/src ./src
 COPY --from=backend-builder /app/prisma ./prisma
-COPY --from=backend-builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=frontend-builder /app/dist ./dist
 COPY tsconfig.json ./
+
+# Gerar Prisma Client (se não foi gerado no stage anterior)
+# Tentar copiar primeiro, se não existir, gerar agora
+RUN if [ -d "/app/node_modules/.prisma" ]; then \
+      echo "Prisma Client já existe"; \
+    else \
+      echo "Gerando Prisma Client no stage final..."; \
+      for i in 1 2 3; do \
+        echo "Tentativa $i..." && \
+        (PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 pnpm prisma:generate && exit 0) && break || \
+        (echo "Tentativa $i falhou, aguardando 15 segundos..." && sleep 15); \
+      done; \
+    fi
 
 # Criar diretórios necessários
 RUN mkdir -p uploads/contracts && \
