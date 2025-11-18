@@ -1,0 +1,43 @@
+# Dockerfile para Frontend (Nginx servindo arquivos estáticos)
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /app
+
+# Instalar pnpm
+RUN npm install -g pnpm
+
+# Copiar arquivos de dependências
+COPY package.json pnpm-lock.yaml ./
+COPY vite.config.ts tsconfig.json ./
+
+# Instalar dependências
+RUN pnpm install --frozen-lockfile
+
+# Copiar código fonte do frontend
+COPY index.html ./
+COPY src/web ./src/web
+COPY src/utils ./src/utils
+COPY public ./public
+
+# Build do frontend
+RUN pnpm build
+
+# Stage final: Nginx
+FROM nginx:alpine
+
+# Copiar arquivos buildados do frontend
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+
+# Copiar configuração customizada do nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expor porta
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
+
+# Comando padrão do nginx já está configurado na imagem base
+CMD ["nginx", "-g", "daemon off;"]
+

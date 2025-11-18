@@ -1,18 +1,18 @@
 version: '3.8'
 
 services:
-  app:
+  backend:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: aion-effort-app
+      dockerfile: Dockerfile.backend
+    container_name: aion-effort-backend
     ports:
       - "4000:4000"
     environment:
       - NODE_ENV=production
       - PORT=4000
       - USE_MOCK=false
-      - FRONTEND_URL=http://localhost:4000
+      - FRONTEND_URL=http://localhost:3000
       - DATABASE_URL=file:./prisma/dev.db
       - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
     volumes:
@@ -27,4 +27,28 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - aion-network
 
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: aion-effort-frontend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - aion-network
+
+networks:
+  aion-network:
+    driver: bridge
