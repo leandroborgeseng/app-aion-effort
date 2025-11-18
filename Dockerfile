@@ -71,9 +71,9 @@ RUN apt-get update && \
 # Instalar pnpm
 RUN npm install -g pnpm
 
-# Criar usuário não-root
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+# Criar usuário não-root (sintaxe Debian)
+RUN groupadd -r -g 1001 nodejs && \
+    useradd -r -u 1001 -g nodejs -s /bin/bash nodejs
 
 # Copiar package.json e instalar dependências
 # tsx precisa estar disponível para executar TypeScript
