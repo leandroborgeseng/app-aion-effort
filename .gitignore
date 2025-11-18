@@ -5,6 +5,7 @@ dist
 *.log
 
 # Database
+# Permitir dev.db no Git (banco pequeno, facilita deploy)
 #*.db
 #*.db-journal
 #prisma/dev.db
