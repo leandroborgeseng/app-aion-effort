@@ -70,20 +70,29 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const loadCurrentUser = async () => {
     try {
       const token = localStorage.getItem('auth_token');
+      console.log('[UserContext] Carregando usuário, token existe:', !!token);
+      
       if (!token) {
+        console.log('[UserContext] Sem token, não carregando usuário');
         setIsLoading(false);
         return;
       }
 
       // Buscar informações do usuário da API
+      console.log('[UserContext] Fazendo requisição para /api/auth/me');
       const res = await fetch('/api/auth/me', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
+      console.log('[UserContext] Resposta de /api/auth/me:', res.status, res.statusText);
+
       if (!res.ok) {
         // Token inválido ou expirado
+        console.error('[UserContext] Erro ao buscar usuário:', res.status, res.statusText);
+        const errorText = await res.text().catch(() => '');
+        console.error('[UserContext] Detalhes do erro:', errorText);
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user');
         setIsLoading(false);
@@ -91,16 +100,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await res.json();
+      console.log('[UserContext] Dados recebidos:', data);
+      
       if (data.success && data.user) {
+        console.log('[UserContext] Usuário carregado com sucesso:', data.user.email);
         setUserState(data.user);
         localStorage.setItem('user', JSON.stringify(data.user));
+      } else {
+        console.error('[UserContext] Resposta sem usuário válido:', data);
       }
     } catch (error) {
-      console.error('Erro ao carregar usuário:', error);
+      console.error('[UserContext] Erro ao carregar usuário:', error);
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
     } finally {
       setIsLoading(false);
+      console.log('[UserContext] Carregamento concluído, isLoading = false');
     }
   };
 
