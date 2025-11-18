@@ -29,6 +29,9 @@ FROM node:20-alpine AS backend-builder
 
 WORKDIR /app
 
+# Instalar dependências do sistema necessárias para Prisma
+RUN apk add --no-cache openssl1.1-compat libc6-compat
+
 # Instalar pnpm
 RUN npm install -g pnpm
 
@@ -43,13 +46,17 @@ COPY src ./src
 COPY prisma ./prisma
 COPY tsconfig.json ./
 
-# Gerar Prisma Client
-RUN pnpm prisma:generate
+# Gerar Prisma Client (com fallback para ignorar checksum se necessário)
+RUN PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 pnpm prisma:generate || \
+    pnpm prisma:generate
 
 # Stage 3: Aplicação final
 FROM node:20-alpine
 
 WORKDIR /app
+
+# Instalar dependências do sistema necessárias para Prisma
+RUN apk add --no-cache openssl1.1-compat libc6-compat
 
 # Instalar pnpm
 RUN npm install -g pnpm
