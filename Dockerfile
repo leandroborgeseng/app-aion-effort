@@ -18,6 +18,7 @@ RUN pnpm install --frozen-lockfile
 # Copiar código fonte do frontend
 COPY index.html ./
 COPY src/web ./src/web
+COPY src/utils ./src/utils
 COPY public ./public
 
 # Build do frontend
