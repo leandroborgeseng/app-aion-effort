@@ -457,6 +457,7 @@ rounds.patch('/:id', async (req, res) => {
       res.json(round);
     }
   } catch (e: any) {
+    console.error('[rounds:PATCH] Erro ao atualizar ronda:', e);
     res.status(500).json({ error: true, message: e?.message });
   }
 });
