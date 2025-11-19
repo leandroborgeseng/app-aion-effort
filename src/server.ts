@@ -17,6 +17,7 @@ import { dashboard } from './routes/dashboard';
 import { config } from './routes/config';
 import { auth } from './routes/auth';
 import { helmetConfig, apiLimiter } from './middleware/security';
+import { errorMiddleware } from './utils/errorHandler';
 
 const app = express();
 
@@ -134,6 +135,9 @@ app.get('/api/os/resumida', async (req, res) => {
     res.status(500).json({ error: true, message: e?.message });
   }
 });
+
+// Middleware de tratamento de erros (deve ser o último)
+app.use(errorMiddleware);
 
 // Frontend agora é servido por um container separado (nginx)
 // Não precisamos mais servir arquivos estáticos aqui
