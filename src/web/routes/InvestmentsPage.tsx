@@ -67,16 +67,27 @@ export default function InvestmentsPage() {
     },
   });
 
-  // Buscar setores disponíveis
-  const { data: sectorsData, isLoading: sectorsLoading } = useQuery<{ sectors: Sector[] }>({
+  // Buscar setores disponíveis da API
+  const { data: sectorsData, isLoading: sectorsLoading, error: sectorsError } = useQuery<{ sectors: Sector[] }>({
     queryKey: ['investment-sectors'],
     queryFn: async () => {
       const res = await fetch('/api/ecm/investments/sectors/list');
-      if (!res.ok) throw new Error('Erro ao buscar setores');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: 'Erro ao buscar setores' }));
+        throw new Error(errorData.message || 'Erro ao buscar setores');
+      }
       const data = await res.json();
       // A API retorna { success, total, sectors } ou pode retornar array direto
-      return data.sectors ? data : { sectors: Array.isArray(data) ? data : [] };
+      if (data.sectors && Array.isArray(data.sectors)) {
+        return { sectors: data.sectors };
+      }
+      if (Array.isArray(data)) {
+        return { sectors: data };
+      }
+      return { sectors: [] };
     },
+    retry: 2,
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
   });
 
   const sectors = sectorsData?.sectors || [];
@@ -1309,7 +1320,40 @@ function InvestmentForm({
             <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
               Setor
             </label>
-            {sectors.length === 0 ? (
+            {sectorsLoading ? (
+              <div style={{ 
+                padding: theme.spacing.sm, 
+                border: `1px solid ${theme.colors.gray[300]}`, 
+                borderRadius: theme.borderRadius.sm,
+                backgroundColor: theme.colors.gray[50],
+                color: theme.colors.gray[600],
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: theme.spacing.xs,
+              }}>
+                <div style={{ 
+                  width: '16px', 
+                  height: '16px', 
+                  border: `2px solid ${theme.colors.gray[300]}`,
+                  borderTopColor: theme.colors.primary,
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                }} />
+                Carregando setores da API...
+              </div>
+            ) : sectorsError ? (
+              <div style={{ 
+                padding: theme.spacing.sm, 
+                border: `1px solid ${theme.colors.danger}`, 
+                borderRadius: theme.borderRadius.sm,
+                backgroundColor: `${theme.colors.danger}10`,
+                color: theme.colors.danger,
+                fontSize: '14px',
+              }}>
+                Erro ao carregar setores. Tente recarregar a página.
+              </div>
+            ) : sectors.length === 0 ? (
               <div style={{ 
                 padding: theme.spacing.sm, 
                 border: `1px solid ${theme.colors.gray[300]}`, 
@@ -1318,7 +1362,7 @@ function InvestmentForm({
                 color: theme.colors.gray[600],
                 fontSize: '14px',
               }}>
-                Carregando setores...
+                Nenhum setor disponível
               </div>
             ) : (
               <select
@@ -1332,18 +1376,19 @@ function InvestmentForm({
                     setor: selectedSector?.name || '',
                   });
                 }}
-              style={{
-                width: '100%',
-                padding: theme.spacing.sm,
-                border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
-                fontSize: '14px',
-              }}
+                style={{
+                  width: '100%',
+                  padding: theme.spacing.sm,
+                  border: `1px solid ${theme.colors.gray[300]}`,
+                  borderRadius: theme.borderRadius.sm,
+                  fontSize: '14px',
+                  backgroundColor: theme.colors.white,
+                }}
               >
                 <option value="">Selecione um setor</option>
                 {sectors.map((sector) => (
                   <option key={sector.id} value={sector.id.toString()}>
-                    {sector.name}
+                    {sector.name} {sector.id ? `(ID: ${sector.id})` : ''}
                   </option>
                 ))}
               </select>
