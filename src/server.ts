@@ -144,7 +144,11 @@ app.use(errorMiddleware);
 console.log('Backend API server - frontend is served by separate nginx container');
 
 const port = Number(process.env.PORT) || 4000;
-app.listen(port, () =>
-  console.log(`API up on :${port} (USE_MOCK=${process.env.USE_MOCK})`)
-);
+app.listen(port, () => {
+  console.log(`API up on :${port} (USE_MOCK=${process.env.USE_MOCK})`);
+  
+  // Iniciar serviço de warm-up das APIs
+  const { startWarmupService } = await import('./services/warmupService');
+  startWarmupService();
+});
 
