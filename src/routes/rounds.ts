@@ -626,14 +626,17 @@ async function isOSCorretiva(os: any): Promise<boolean> {
   }
 }
 
-// GET /api/ecm/rounds/os/available - Buscar OS disponíveis para vincular (APENAS CORRETIVAS ABERTAS)
+// GET /api/ecm/rounds/os/available - Buscar OS disponíveis para vincular (CORRETIVAS - ABERTAS OU FECHADAS)
 rounds.get('/os/available', async (req, res) => {
   try {
     const { setor, situacao } = req.query;
+    // situacao pode ser: 'Aberta', 'Fechada', ou 'Todas' (padrão: 'Aberta' para manter compatibilidade)
+    const situacaoFilter = situacao === 'Fechada' ? 'Fechada' : situacao === 'Todas' ? 'Todas' : 'Aberta';
+    
     const { dataSource } = await import('../adapters/dataSource');
     
-    // Incluir filtro de corretivas na chave do cache para invalidar quando necessário
-    const cacheKey = generateCacheKey('rounds:os-available-corretivas', { periodo: 'MesCorrente' });
+    // Incluir filtro de situação na chave do cache
+    const cacheKey = generateCacheKey('rounds:os-available-corretivas', { periodo: 'MesCorrente', situacao: situacaoFilter });
     
     // Tentar buscar do cache primeiro
     let osData: any[] | null = null;
@@ -687,14 +690,22 @@ rounds.get('/os/available', async (req, res) => {
       osData = [];
     }
 
-    // Filtrar apenas OS corretivas e abertas
+    // Filtrar apenas OS corretivas
     let filtered = osData;
     
-    // Filtrar por situação (apenas abertas)
-    filtered = filtered.filter((os: any) => {
-      const situacao = (os.SituacaoDaOS || os.Situacao || '').toString().trim().toLowerCase();
-      return situacao === 'aberta' || situacao === 'aberto' || situacao === 'em andamento' || situacao === 'pendente';
-    });
+    // Filtrar por situação conforme solicitado
+    if (situacaoFilter === 'Aberta') {
+      filtered = filtered.filter((os: any) => {
+        const situacao = (os.SituacaoDaOS || os.Situacao || '').toString().trim().toLowerCase();
+        return situacao === 'aberta' || situacao === 'aberto' || situacao === 'em andamento' || situacao === 'pendente';
+      });
+    } else if (situacaoFilter === 'Fechada') {
+      filtered = filtered.filter((os: any) => {
+        const situacao = (os.SituacaoDaOS || os.Situacao || '').toString().trim().toLowerCase();
+        return situacao === 'fechada' || situacao === 'fechado' || situacao === 'concluída' || situacao === 'concluida';
+      });
+    }
+    // Se for 'Todas', não filtra por situação
 
     // Filtrar apenas corretivas
     const osComValidacao = await Promise.all(
@@ -711,9 +722,6 @@ rounds.get('/os/available', async (req, res) => {
     // Filtros adicionais opcionais
     if (setor) {
       filtered = filtered.filter((os: any) => os.Setor === setor);
-    }
-    if (situacao) {
-      filtered = filtered.filter((os: any) => os.SituacaoDaOS === situacao);
     }
 
     console.log(`[rounds:os-available] Retornando ${filtered.length} OS corretivas abertas de ${osData.length} total`);

@@ -34,16 +34,18 @@ export default function RondasPage() {
     },
   });
 
-  const { data: availableOS } = useQuery({
-    queryKey: ['rounds-os-available'],
+  const [osSituacaoFilter, setOsSituacaoFilter] = useState<'Aberta' | 'Fechada' | 'Todas'>('Aberta');
+
+  const { data: availableOS, refetch: refetchOS } = useQuery({
+    queryKey: ['rounds-os-available', osSituacaoFilter],
     queryFn: async () => {
-      const res = await fetch('/api/ecm/rounds/os/available');
+      const res = await fetch(`/api/ecm/rounds/os/available?situacao=${osSituacaoFilter}`);
       if (!res.ok) throw new Error('Erro ao buscar OS disponíveis');
       return res.json();
     },
   });
 
-  const { data: availableInvestments } = useQuery({
+  const { data: availableInvestments, refetch: refetchInvestments } = useQuery({
     queryKey: ['rounds-investments-available'],
     queryFn: async () => {
       const res = await fetch('/api/ecm/investments');
@@ -307,6 +309,10 @@ export default function RondasPage() {
         <CreateRoundForm
           round={editingRound}
           availableOS={availableOS || []}
+          osSituacaoFilter={osSituacaoFilter}
+          setOsSituacaoFilter={setOsSituacaoFilter}
+          refetchOS={refetchOS}
+          refetchInvestments={refetchInvestments}
           onSave={(formData) => {
             console.log('[RondasPage] onSave chamado com formData:', formData);
             console.log('[RondasPage] editingId:', editingId);
@@ -394,6 +400,7 @@ export default function RondasPage() {
                   <div style={{ display: 'flex', gap: theme.spacing.xs }}>
                     <button
                       onClick={() => {
+                        console.log('[RondasPage] Botão editar clicado, round:', round);
                         setEditingId(round.id || `round-${idx}`);
                         setShowCreateForm(true);
                       }}
@@ -553,11 +560,19 @@ export default function RondasPage() {
 function CreateRoundForm({
   round,
   availableOS: allAvailableOS,
+  osSituacaoFilter,
+  setOsSituacaoFilter,
+  refetchOS,
+  refetchInvestments,
   onSave,
   onCancel,
 }: {
   round?: any;
   availableOS: any[];
+  osSituacaoFilter: 'Aberta' | 'Fechada' | 'Todas';
+  setOsSituacaoFilter: (filter: 'Aberta' | 'Fechada' | 'Todas') => void;
+  refetchOS: () => void;
+  refetchInvestments: () => void;
   onSave: (data: any) => void;
   onCancel: () => void;
 }) {
@@ -704,8 +719,8 @@ function CreateRoundForm({
   }, [formData.sectorId]);
 
   // Filtrar OS por setor selecionado e setores relacionados
-  // Nota: O backend já retorna apenas OS corretivas abertas, então só precisamos filtrar por setor
-  const availableOS = useMemo(() => {
+  // Nota: O backend já retorna apenas OS corretivas conforme o filtro de situação, então só precisamos filtrar por setor
+  const filteredOS = useMemo(() => {
     if (!formData.sectorId || !allAvailableOS) return [];
     
     const sectorIds = [Number(formData.sectorId), ...relatedSectors.map(s => s.sectorId)];
@@ -735,7 +750,7 @@ function CreateRoundForm({
   }, [formData.sectorId, allAvailableInvestments, relatedSectors]);
 
   // Agrupar OS por setor
-  const osBySector = availableOS.reduce((acc: Record<string, any[]>, os: any) => {
+  const osBySector = filteredOS.reduce((acc: Record<string, any[]>, os: any) => {
     const setor = os.Setor || 'Outros';
     if (!acc[setor]) acc[setor] = [];
     acc[setor].push(os);
@@ -898,9 +913,80 @@ function CreateRoundForm({
 
         {/* Seleção de OS */}
         <div>
-          <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
-            Ordens de Serviço Vinculadas ({selectedOS.length} selecionadas)
-          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xs }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500 }}>
+              Ordens de Serviço Vinculadas ({selectedOS.length} selecionadas)
+            </label>
+            <div style={{ display: 'flex', gap: theme.spacing.xs }}>
+              <button
+                type="button"
+                onClick={() => setOsSituacaoFilter('Aberta')}
+                style={{
+                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                  fontSize: '12px',
+                  border: `1px solid ${osSituacaoFilter === 'Aberta' ? theme.colors.primary : theme.colors.gray[300]}`,
+                  borderRadius: theme.borderRadius.sm,
+                  backgroundColor: osSituacaoFilter === 'Aberta' ? theme.colors.primary : theme.colors.white,
+                  color: osSituacaoFilter === 'Aberta' ? theme.colors.white : theme.colors.dark,
+                  cursor: 'pointer',
+                  fontWeight: osSituacaoFilter === 'Aberta' ? 600 : 400,
+                }}
+              >
+                Abertas
+              </button>
+              <button
+                type="button"
+                onClick={() => setOsSituacaoFilter('Fechada')}
+                style={{
+                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                  fontSize: '12px',
+                  border: `1px solid ${osSituacaoFilter === 'Fechada' ? theme.colors.primary : theme.colors.gray[300]}`,
+                  borderRadius: theme.borderRadius.sm,
+                  backgroundColor: osSituacaoFilter === 'Fechada' ? theme.colors.primary : theme.colors.white,
+                  color: osSituacaoFilter === 'Fechada' ? theme.colors.white : theme.colors.dark,
+                  cursor: 'pointer',
+                  fontWeight: osSituacaoFilter === 'Fechada' ? 600 : 400,
+                }}
+              >
+                Fechadas
+              </button>
+              <button
+                type="button"
+                onClick={() => setOsSituacaoFilter('Todas')}
+                style={{
+                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                  fontSize: '12px',
+                  border: `1px solid ${osSituacaoFilter === 'Todas' ? theme.colors.primary : theme.colors.gray[300]}`,
+                  borderRadius: theme.borderRadius.sm,
+                  backgroundColor: osSituacaoFilter === 'Todas' ? theme.colors.primary : theme.colors.white,
+                  color: osSituacaoFilter === 'Todas' ? theme.colors.white : theme.colors.dark,
+                  cursor: 'pointer',
+                  fontWeight: osSituacaoFilter === 'Todas' ? 600 : 400,
+                }}
+              >
+                Todas
+              </button>
+              <button
+                type="button"
+                onClick={() => refetchOS()}
+                style={{
+                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                  fontSize: '12px',
+                  border: `1px solid ${theme.colors.gray[300]}`,
+                  borderRadius: theme.borderRadius.sm,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: theme.spacing.xs,
+                }}
+                title="Atualizar lista de OS"
+              >
+                <FiRefreshCw size={14} />
+              </button>
+            </div>
+          </div>
           <div
             style={{
               maxHeight: '300px',
@@ -941,9 +1027,9 @@ function CreateRoundForm({
                 ))}
               </div>
             ))}
-            {availableOS.length === 0 && formData.sectorId && (
+            {filteredOS.length === 0 && formData.sectorId && (
               <p style={{ margin: 0, fontSize: '13px', color: theme.colors.gray[500], textAlign: 'center', padding: theme.spacing.md }}>
-                Nenhuma OS disponível para este setor
+                Nenhuma OS {osSituacaoFilter.toLowerCase()} disponível para este setor
               </p>
             )}
             {!formData.sectorId && (
@@ -957,9 +1043,31 @@ function CreateRoundForm({
         {/* Investimentos do Setor */}
         {formData.sectorId && (
           <div>
-            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
-              Investimentos do Setor ({selectedInvestments.length} selecionados de {availableInvestments?.length || 0} encontrados)
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xs }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500 }}>
+                Investimentos do Setor ({selectedInvestments.length} selecionados de {availableInvestments?.length || 0} encontrados)
+              </label>
+              <button
+                type="button"
+                onClick={() => refetchInvestments()}
+                style={{
+                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                  fontSize: '12px',
+                  border: `1px solid ${theme.colors.gray[300]}`,
+                  borderRadius: theme.borderRadius.sm,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: theme.spacing.xs,
+                }}
+                title="Atualizar lista de investimentos"
+              >
+                <FiRefreshCw size={14} />
+                Atualizar
+              </button>
+            </div>
             <div
               style={{
                 maxHeight: '300px',
