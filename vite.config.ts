@@ -8,12 +8,8 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: true, // Habilitar sourcemaps para debug
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: false, // Manter console.log para debug
-      },
-    },
+    // Usar esbuild como minificador (padrão, mais rápido e já incluído)
+    minify: 'esbuild',
     rollupOptions: {
       output: {
         manualChunks: undefined,
