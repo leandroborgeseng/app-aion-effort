@@ -398,17 +398,31 @@ rounds.patch('/:id', async (req, res) => {
       const updateData: any = {};
       if (sectorId !== undefined) updateData.sectorId = Number(sectorId);
       if (sectorName !== undefined) updateData.sectorName = sectorName;
-      if (weekStart !== undefined) updateData.weekStart = new Date(weekStart);
+      if (weekStart !== undefined) {
+        // Normalizar weekStart para o início da semana (segunda-feira, 00:00:00)
+        const weekStartDate = new Date(weekStart);
+        const dayOfWeek = weekStartDate.getDay();
+        const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const normalizedWeekStart = new Date(weekStartDate);
+        normalizedWeekStart.setDate(weekStartDate.getDate() + daysToMonday);
+        normalizedWeekStart.setHours(0, 0, 0, 0);
+        updateData.weekStart = normalizedWeekStart;
+        console.log('[rounds:PATCH] Data normalizada:', weekStart, '→', normalizedWeekStart.toISOString());
+      }
       if (responsibleId !== undefined) updateData.responsibleId = responsibleId;
       if (responsibleName !== undefined) updateData.responsibleName = responsibleName;
       if (notes !== undefined) updateData.notes = notes;
       if (purchaseRequestIds !== undefined) updateData.purchaseRequestIds = JSON.stringify(purchaseRequestIds);
       if (osIds !== undefined) updateData.osIds = JSON.stringify(osIds);
 
+      console.log('[rounds:PATCH] Dados para atualizar:', updateData);
+
       const round = await prismaClient.sectorRound.update({
         where: { id },
         data: updateData,
       });
+
+      console.log('[rounds:PATCH] Ronda atualizada com sucesso:', round.id);
 
       // Atualizar vínculos de investimentos
       if (investmentIds !== undefined) {
