@@ -644,17 +644,27 @@ investments.get('/sectors/list', async (req, res) => {
       console.log(`[investments:sectors/list] Buscou ${equipamentos.length} equipamentos da API do Effort`);
       
       // Extrair setores únicos dos equipamentos
+      let setoresEquipamentos = 0;
       equipamentos.forEach((equip: any) => {
         const setorNome = equip.Setor || equip.setor || '';
         if (setorNome && setorNome.trim() !== '') {
           const sectorId = getSectorIdFromName(setorNome);
           if (sectorId) {
             // Usar o nome original do setor (não mapear para nome genérico)
-            setoresUnicos.set(setorNome, sectorId);
+            if (!setoresUnicos.has(setorNome)) {
+              setoresUnicos.set(setorNome, sectorId);
+              setoresEquipamentos++;
+            }
           }
         }
       });
-      console.log(`[investments:sectors/list] Encontrou ${setoresUnicos.size} setores únicos nos equipamentos`);
+      console.log(`[investments:sectors/list] Encontrou ${setoresEquipamentos} setores únicos nos equipamentos (total acumulado: ${setoresUnicos.size})`);
+      
+      // Debug: mostrar alguns exemplos de setores encontrados
+      if (setoresEquipamentos > 0) {
+        const exemplos = Array.from(setoresUnicos.entries()).slice(0, 5);
+        console.log(`[investments:sectors/list] Exemplos de setores dos equipamentos:`, exemplos.map(([name, id]) => `${name} (ID: ${id})`).join(', '));
+      }
     } catch (error: any) {
       console.error('[investments:sectors/list] Erro ao buscar equipamentos da API:', error?.message);
     }
@@ -675,17 +685,29 @@ investments.get('/sectors/list', async (req, res) => {
       console.log(`[investments:sectors/list] Buscou ${osList.length} OS da API do Effort`);
       
       // Extrair setores únicos das OS
+      let setoresOS = 0;
       osList.forEach((os: any) => {
         const setorNome = os.Setor || os.setor || '';
         if (setorNome && setorNome.trim() !== '') {
           const sectorId = getSectorIdFromName(setorNome);
           if (sectorId) {
             // Usar o nome original do setor (não mapear para nome genérico)
-            setoresUnicos.set(setorNome, sectorId);
+            if (!setoresUnicos.has(setorNome)) {
+              setoresUnicos.set(setorNome, sectorId);
+              setoresOS++;
+            }
           }
         }
       });
-      console.log(`[investments:sectors/list] Total de ${setoresUnicos.size} setores únicos (equipamentos + OS)`);
+      console.log(`[investments:sectors/list] Encontrou ${setoresOS} setores novos nas OS (total acumulado: ${setoresUnicos.size})`);
+      
+      // Debug: mostrar alguns exemplos de setores encontrados
+      if (setoresOS > 0) {
+        const exemplos = Array.from(setoresUnicos.entries()).slice(-5);
+        console.log(`[investments:sectors/list] Exemplos de setores das OS:`, exemplos.map(([name, id]) => `${name} (ID: ${id})`).join(', '));
+      }
+      
+      console.log(`[investments:sectors/list] Total final: ${setoresUnicos.size} setores únicos (${setoresEquipamentos} de equipamentos + ${setoresOS} de OS)`);
     } catch (error: any) {
       console.error('[investments:sectors/list] Erro ao buscar OS da API:', error?.message);
     }
