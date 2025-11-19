@@ -491,8 +491,21 @@ rounds.patch('/:id', authenticateToken, async (req: AuthRequest, res) => {
 });
 
 // DELETE /api/ecm/rounds/:id - Deletar ronda
-rounds.delete('/:id', async (req, res) => {
+rounds.delete('/:id', authenticateToken, async (req: AuthRequest, res) => {
   try {
+    // Verificar permissões: apenas admin e gerente podem deletar rondas
+    if (!req.user) {
+      return res.status(401).json({ error: true, message: 'Não autenticado' });
+    }
+    
+    if (req.user.role !== 'admin' && req.user.role !== 'gerente') {
+      console.log('[rounds:DELETE] Usuário sem permissão:', req.user.role);
+      return res.status(403).json({ 
+        error: true, 
+        message: 'Você não tem permissão para deletar rondas. Apenas administradores e gerentes podem fazer isso.' 
+      });
+    }
+    
     const { id } = req.params;
 
     if (USE_MOCK) {
