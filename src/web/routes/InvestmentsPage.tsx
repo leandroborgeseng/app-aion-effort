@@ -74,16 +74,12 @@ export default function InvestmentsPage() {
       const res = await fetch('/api/ecm/investments/sectors/list');
       if (!res.ok) throw new Error('Erro ao buscar setores');
       const data = await res.json();
-      console.log('[InvestmentsPage] Setores recebidos da API:', data);
-      return data;
+      // A API retorna { success, total, sectors } ou pode retornar array direto
+      return data.sectors ? data : { sectors: Array.isArray(data) ? data : [] };
     },
   });
 
-  // Debug: verificar setores
-  useEffect(() => {
-    console.log('[InvestmentsPage] sectorsData:', sectorsData);
-    console.log('[InvestmentsPage] sectorsData?.sectors:', sectorsData?.sectors);
-  }, [sectorsData]);
+  const sectors = sectorsData?.sectors || [];
 
   const createMutation = useMutation({
     mutationFn: async (data: Partial<Investment>) => {
@@ -322,6 +318,87 @@ export default function InvestmentsPage() {
           </div>
         ))}
       </div>
+
+      {/* Setores Disponíveis da API */}
+      {sectors && sectors.length > 0 && (
+        <div
+          style={{
+            backgroundColor: theme.colors.white,
+            padding: theme.spacing.lg,
+            borderRadius: theme.borderRadius.md,
+            boxShadow: theme.shadows.md,
+            marginBottom: theme.spacing.xl,
+          }}
+        >
+          <div style={{ marginBottom: theme.spacing.md }}>
+            <h2
+              style={{
+                margin: 0,
+                marginBottom: theme.spacing.xs,
+                fontSize: '18px',
+                fontWeight: 600,
+                color: theme.colors.dark,
+                display: 'flex',
+                alignItems: 'center',
+                gap: theme.spacing.xs,
+              }}
+            >
+              <FiTag size={20} color={theme.colors.primary} />
+              Setores Disponíveis da API ({sectors.length} setores)
+            </h2>
+            <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600], fontStyle: 'italic' }}>
+              Estes setores são retornados pela API e podem ser usados para filtros em outros módulos do sistema.
+            </p>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: theme.spacing.sm,
+              maxHeight: '200px',
+              overflow: 'auto',
+              padding: theme.spacing.sm,
+              backgroundColor: theme.colors.gray[50],
+              borderRadius: theme.borderRadius.sm,
+            }}
+          >
+            {sectors.map((sector: Sector, idx: number) => (
+              <div
+                key={idx}
+                style={{
+                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                  backgroundColor: theme.colors.white,
+                  border: `1px solid ${theme.colors.gray[300]}`,
+                  borderRadius: theme.borderRadius.sm,
+                  fontSize: '13px',
+                  color: theme.colors.dark,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: theme.spacing.xs,
+                  boxShadow: theme.shadows.xs,
+                }}
+                title={`ID: ${sector.id || 'N/A'}`}
+              >
+                <strong>{sector.name || 'Setor sem nome'}</strong>
+                {sector.id && (
+                  <span
+                    style={{
+                      padding: `2px ${theme.spacing.xs}`,
+                      backgroundColor: theme.colors.primary + '20',
+                      color: theme.colors.primary,
+                      borderRadius: theme.borderRadius.xs,
+                      fontSize: '11px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    ID: {sector.id}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filtros */}
       {showFilters && (
