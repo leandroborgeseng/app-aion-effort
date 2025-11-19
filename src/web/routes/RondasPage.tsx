@@ -273,9 +273,21 @@ export default function RondasPage() {
           round={editingRound}
           availableOS={availableOS || []}
           onSave={(formData) => {
+            console.log('[RondasPage] onSave chamado com formData:', formData);
+            console.log('[RondasPage] editingId:', editingId);
+            
             if (editingId) {
-              updateRoundMutation.mutate({ id: editingId, data: formData });
+              console.log('[RondasPage] Chamando updateRoundMutation.mutate');
+              updateRoundMutation.mutate({ id: editingId, data: formData }, {
+                onSuccess: () => {
+                  console.log('[RondasPage] Update mutation success callback');
+                },
+                onError: (error) => {
+                  console.error('[RondasPage] Update mutation error callback:', error);
+                },
+              });
             } else {
+              console.log('[RondasPage] Chamando createRoundMutation.mutate');
               createRoundMutation.mutate(formData);
             }
           }}
@@ -697,18 +709,29 @@ function CreateRoundForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[RondasPage] handleSubmit chamado');
+    
     if (!formData.sectorId || !formData.sectorName || !formData.weekStart || !formData.responsibleName) {
       alert('Preencha todos os campos obrigatórios');
       return;
     }
+    
     const dataToSave = {
-      ...formData,
+      sectorId: formData.sectorId,
+      sectorName: formData.sectorName,
+      weekStart: formData.weekStart,
+      responsibleId: formData.responsibleId,
+      responsibleName: formData.responsibleName,
+      notes: formData.notes || '',
       osIds: selectedOS,
       purchaseRequestIds: selectedPurchaseRequests,
       investmentIds: selectedInvestments,
     };
     
     console.log('[RondasPage] Dados a serem salvos:', dataToSave);
+    console.log('[RondasPage] Round existe?', !!round);
+    console.log('[RondasPage] Round ID:', round?.id);
+    
     onSave(dataToSave);
   };
 
