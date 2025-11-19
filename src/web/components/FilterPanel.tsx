@@ -263,7 +263,6 @@ export default function FilterPanel({
                 style={{
                   width: '100%',
                   padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  borderRadius: theme.borderRadius.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   fontSize: '13px',
                   backgroundColor: theme.colors.white,
@@ -297,7 +296,6 @@ export default function FilterPanel({
                 style={{
                   width: '100%',
                   padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  borderRadius: theme.borderRadius.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   fontSize: '13px',
                   backgroundColor: theme.colors.white,
@@ -331,7 +329,6 @@ export default function FilterPanel({
                 style={{
                   width: '100%',
                   padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  borderRadius: theme.borderRadius.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   fontSize: '13px',
                   backgroundColor: theme.colors.white,
@@ -365,7 +362,6 @@ export default function FilterPanel({
                 style={{
                   width: '100%',
                   padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  borderRadius: theme.borderRadius.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   fontSize: '13px',
                   backgroundColor: theme.colors.white,
@@ -396,7 +392,6 @@ export default function FilterPanel({
                 style={{
                   width: '100%',
                   padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  borderRadius: theme.borderRadius.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   fontSize: '13px',
                   backgroundColor: theme.colors.white,
@@ -430,7 +425,6 @@ export default function FilterPanel({
                 style={{
                   width: '100%',
                   padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  borderRadius: theme.borderRadius.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   fontSize: '13px',
                   backgroundColor: theme.colors.white,
@@ -610,7 +604,6 @@ export default function FilterPanel({
                   style={{
                     flex: 1,
                     padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                    borderRadius: theme.borderRadius.sm,
                     border: `1px solid ${theme.colors.gray[300]}`,
                     fontSize: '13px',
                   }}

@@ -677,7 +677,6 @@ function EditableTable({
               width: '100%',
               padding: '4px 8px',
               border: `2px solid ${theme.colors.primary}`,
-              borderRadius: theme.borderRadius.xs,
               fontSize: '13px',
               backgroundColor: theme.colors.white,
             }}
@@ -702,7 +701,6 @@ function EditableTable({
               width: '100%',
               padding: '4px 8px',
               border: `2px solid ${theme.colors.primary}`,
-              borderRadius: theme.borderRadius.xs,
               fontSize: '13px',
             }}
           />
@@ -723,7 +721,6 @@ function EditableTable({
               width: '100%',
               padding: '4px 8px',
               border: `2px solid ${theme.colors.primary}`,
-              borderRadius: theme.borderRadius.xs,
               fontSize: '13px',
             }}
           />
@@ -745,7 +742,6 @@ function EditableTable({
               width: '100%',
               padding: '4px 8px',
               border: `2px solid ${theme.colors.primary}`,
-              borderRadius: theme.borderRadius.xs,
               fontSize: '13px',
               backgroundColor: theme.colors.white,
             }}
@@ -1216,7 +1212,6 @@ function InvestmentForm({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
               }}
             />
@@ -1233,7 +1228,6 @@ function InvestmentForm({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
               }}
             >
@@ -1270,7 +1264,6 @@ function InvestmentForm({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
               }}
             />
@@ -1287,7 +1280,6 @@ function InvestmentForm({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
               }}
             >
@@ -1309,7 +1301,6 @@ function InvestmentForm({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
               }}
             >
@@ -1410,7 +1401,6 @@ function InvestmentForm({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
               }}
             />
@@ -1427,7 +1417,6 @@ function InvestmentForm({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
               }}
             />
@@ -1445,7 +1434,6 @@ function InvestmentForm({
               width: '100%',
               padding: theme.spacing.sm,
               border: `1px solid ${theme.colors.gray[300]}`,
-              borderRadius: theme.borderRadius.sm,
               fontSize: '14px',
               fontFamily: 'inherit',
             }}
@@ -1463,7 +1451,6 @@ function InvestmentForm({
               width: '100%',
               padding: theme.spacing.sm,
               border: `1px solid ${theme.colors.gray[300]}`,
-              borderRadius: theme.borderRadius.sm,
               fontSize: '14px',
               fontFamily: 'inherit',
             }}

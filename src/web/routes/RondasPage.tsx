@@ -836,7 +836,6 @@ function CreateRoundForm({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
                 backgroundColor: sectorsLoading ? theme.colors.gray[100] : theme.colors.white,
                 cursor: sectorsLoading ? 'not-allowed' : 'pointer',
@@ -868,7 +867,6 @@ function CreateRoundForm({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
               }}
             />
@@ -887,7 +885,6 @@ function CreateRoundForm({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
                 backgroundColor: isLoadingResponsible ? theme.colors.gray[100] : theme.colors.white,
                 cursor: isLoadingResponsible ? 'not-allowed' : 'text',
@@ -918,7 +915,6 @@ function CreateRoundForm({
               width: '100%',
               padding: theme.spacing.sm,
               border: `1px solid ${theme.colors.gray[300]}`,
-              borderRadius: theme.borderRadius.sm,
               fontSize: '14px',
               fontFamily: 'inherit',
             }}
@@ -1348,7 +1344,6 @@ function CreateInvestmentFromRoundModal({
                 width: '100%',
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
               }}
             />

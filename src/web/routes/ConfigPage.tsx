@@ -228,7 +228,6 @@ export default function ConfigPage() {
                         onChange={(e) => setEditValue(e.target.value)}
                         style={{
                           padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                          borderRadius: theme.borderRadius.sm,
                           border: `1px solid ${theme.colors.gray[300]}`,
                           fontSize: '14px',
                           minWidth: '180px',
