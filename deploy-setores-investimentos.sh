@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Script para atualizar produção com visualização de setores na página de Investimentos
+# Script para atualizar produção com campo setor usando API
 
-echo "🚀 ATUALIZANDO PRODUÇÃO - VISUALIZAÇÃO DE SETORES"
-echo "=================================================="
+echo "🚀 ATUALIZANDO PRODUÇÃO - CAMPO SETOR COM API"
+echo "=============================================="
 echo ""
 
 cd /opt/apps/app-aion-effort || exit 1
@@ -83,19 +83,19 @@ echo "=========================================="
 echo "✅ ATUALIZAÇÃO CONCLUÍDA!"
 echo ""
 echo "📋 O que foi atualizado:"
-echo "- Visualização de setores retornados pela API na página de Investimentos"
-echo "- Setores exibidos em cards com nome e ID"
-echo "- Informação de que os setores podem ser usados para filtros em outros módulos"
+echo "- Campo 'Setor' no formulário de investimentos agora busca da API"
+echo "- Melhor tratamento de loading e erros"
+echo "- Exibição do ID do setor junto com o nome"
+echo "- Cache de 5 minutos para melhor performance"
+echo "- Retry automático em caso de erro"
 echo ""
 echo "📋 Teste:"
-echo "1. Acesse a aplicação: http://seu-servidor:3000"
-echo "2. Faça login"
-echo "3. Acesse a página de Investimentos"
-echo "4. Verifique a seção 'Setores Disponíveis da API' logo após os cards de resumo"
-echo "5. Os setores devem aparecer em cards com nome e ID"
+echo "1. Acesse: http://189.90.139.222:3000/investimentos"
+echo "2. Clique em 'Novo Investimento'"
+echo "3. O campo 'Setor' deve mostrar os setores da API"
+echo "4. Cada setor mostra o nome e o ID"
 echo ""
 echo "📋 Se algo não funcionar:"
 echo "- Verifique os logs: docker-compose logs -f backend"
 echo "- Verifique os logs: docker-compose logs -f frontend"
 echo "- Verifique o status: docker-compose ps"
-
