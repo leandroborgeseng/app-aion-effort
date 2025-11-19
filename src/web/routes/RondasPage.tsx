@@ -78,18 +78,31 @@ export default function RondasPage() {
 
   const updateRoundMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      console.log('[RondasPage] Atualizando ronda:', { id, data });
       const res = await fetch(`/api/ecm/rounds/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Erro ao atualizar ronda');
-      return res.json();
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: 'Erro ao atualizar ronda' }));
+        console.error('[RondasPage] Erro na resposta:', res.status, errorData);
+        throw new Error(errorData.message || 'Erro ao atualizar ronda');
+      }
+      const result = await res.json();
+      console.log('[RondasPage] Ronda atualizada com sucesso:', result);
+      return result;
     },
     onSuccess: () => {
+      console.log('[RondasPage] onSuccess chamado - invalidando queries');
       queryClient.invalidateQueries({ queryKey: ['rounds'] });
       setEditingId(null);
       setShowCreateForm(false);
+      alert('Ronda atualizada com sucesso!');
+    },
+    onError: (error: any) => {
+      console.error('[RondasPage] Erro ao atualizar ronda:', error);
+      alert(`Erro ao atualizar ronda: ${error.message || 'Erro desconhecido'}`);
     },
   });
 
