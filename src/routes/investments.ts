@@ -602,94 +602,92 @@ investments.get('/sectors/mapping-report', async (req, res) => {
   }
 });
 
-// GET /api/ecm/investments/sectors/list - Listar todos os setores disponíveis na API
+// GET /api/ecm/investments/sectors/list - Listar todos os setores disponíveis na API do Effort
 investments.get('/sectors/list', async (req, res) => {
   try {
-    // Usar o mapeamento fixo de setores que já temos
-    const INVESTMENT_SECTOR_MAPPING: Record<string, number> = {
-      'PEDIATRIA': 10,
-      'UTI 2': 2,
-      'UTI 1': 1,
-      'UTI 3': 3,
-      'CENTRO CIRÚRGICO': 5,
-      'Centro Cirúrgico': 5,
-      'CENTRO CIRÚRGICO - 10A': 5,
-      'Centro Cirúrgico Ambulatorial': 5,
-      'UNIDADE DE EMERGÊNCIA': 4,
-      'UTI/UNIDADE DE EMERGÊNCIA': 4,
-      'Emergência': 4,
-      'TOMOGRAFIA': 6,
-      'TOMOGRAFIA 2': 6,
-      'RESSONÂNCIA MAGNÉTICA': 6,
-      'RESSONANCIA MAGNÉTICA': 6,
-      'ULTRASSONOGRAFIA': 6,
-      'HEMODINÂMICA': 7,
-      'HEMODINAMICA': 7,
-      'CDC': 7,
-      'BERÇÁRIO': 11,
-      'BERÇARIO': 11,
-      'UTI NEONATAL E PEDIÁTRICA': 1,
-      'UTI Neonatal e Pediátrica': 1,
-      'UTI INFANTIL - 8': 1,
-      'UTI INFANTIL-8': 1,
-      'UTI ADULTO I': 1,
-      'UTI Adulto I': 1,
-      'UNIDADES DE INTERNAÇÃO': 12,
-      'EDUCAÇÃO CORPORATIVA': 12,
-      'Educação Corporativa': 12,
-      'CME': 5,
-      'ENDOSCOPIA': 5,
-      'MANUTENÇÃO': 12,
-      'MANUTENCAO': 12,
-      'ROUPARIA': 12,
-      'UNIDADE 1': 12,
-      'Unidade 1': 12,
-      'CENTRO CIRÚRGICO AMBULATORIAL': 5,
-      'Centro Cirúrgico Ambulatorial': 5,
-    };
-
-    // Setores básicos do sistema (prioridade)
-    const basicSectors: Record<number, string> = {
-      1: 'UTI 1',
-      2: 'UTI 2',
-      3: 'UTI 3',
-      4: 'Emergência',
-      5: 'Centro Cirúrgico',
-      6: 'Radiologia',
-      7: 'Cardiologia',
-      8: 'Neurologia',
-      9: 'Ortopedia',
-      10: 'Pediatria',
-      11: 'Maternidade',
-      12: 'Ambulatório',
-    };
-
-    // Criar um mapa de IDs únicos para nomes únicos, começando com setores básicos
-    const sectorIdToName: Record<number, string> = { ...basicSectors };
+    // Buscar equipamentos da API do Effort para extrair setores reais
+    const { dataSource } = await import('../adapters/dataSource');
+    const { getSectorIdFromName } = await import('../utils/sectorMapping');
     
-    // Adicionar setores específicos de investimentos que não estão nos básicos
-    // (mantendo os nomes básicos como prioridade)
-    Object.entries(INVESTMENT_SECTOR_MAPPING).forEach(([name, id]) => {
-      // Só adicionar se não existir um nome básico para esse ID
-      if (!basicSectors[id]) {
-        // Se já existe um nome para esse ID, manter o primeiro (mais específico)
-        if (!sectorIdToName[id]) {
-          sectorIdToName[id] = name;
-        }
+    let equipamentos: any[] = [];
+    try {
+      const equipamentosData = await dataSource.equipamentos({});
+      // Garantir que é um array
+      if (Array.isArray(equipamentosData)) {
+        equipamentos = equipamentosData;
+      } else if (equipamentosData && typeof equipamentosData === 'object') {
+        equipamentos = (equipamentosData as any).Itens || (equipamentosData as any).data || (equipamentosData as any).items || [];
       }
-    });
+    } catch (error: any) {
+      console.error('[investments:sectors/list] Erro ao buscar equipamentos da API:', error?.message);
+      // Se falhar, usar setores mapeados como fallback
+    }
+
+    // Extrair setores únicos dos equipamentos
+    const setoresUnicos = new Map<string, number>();
+    
+    if (equipamentos.length > 0) {
+      equipamentos.forEach((equip: any) => {
+        const setorNome = equip.Setor || equip.setor || '';
+        if (setorNome && setorNome.trim() !== '') {
+          // Usar o mapeamento para obter o ID do setor
+          const sectorId = getSectorIdFromName(setorNome);
+          if (sectorId) {
+            // Se já existe um setor com esse ID, manter o nome mais curto/comum
+            if (!setoresUnicos.has(setorNome)) {
+              setoresUnicos.set(setorNome, sectorId);
+            }
+          }
+        }
+      });
+    }
+
+    // Se não encontrou setores na API, usar setores mapeados como fallback
+    if (setoresUnicos.size === 0) {
+      console.log('[investments:sectors/list] Nenhum setor encontrado na API, usando mapeamento fixo');
+      
+      // Setores básicos do sistema
+      const basicSectors: Record<number, string> = {
+        1: 'UTI 1',
+        2: 'UTI 2',
+        3: 'UTI 3',
+        4: 'Emergência',
+        5: 'Centro Cirúrgico',
+        6: 'Radiologia',
+        7: 'Cardiologia',
+        8: 'Neurologia',
+        9: 'Ortopedia',
+        10: 'Pediatria',
+        11: 'Maternidade',
+        12: 'Ambulatório',
+      };
+
+      Object.entries(basicSectors).forEach(([idStr, name]) => {
+        setoresUnicos.set(name, parseInt(idStr));
+      });
+    }
 
     // Converter para array ordenado
-    const sectors = Object.entries(sectorIdToName)
-      .map(([idStr, name]) => ({ id: parseInt(idStr), name }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    const sectors = Array.from(setoresUnicos.entries())
+      .map(([name, id]) => ({ id, name }))
+      .sort((a, b) => {
+        // Ordenar primeiro por ID, depois por nome
+        if (a.id !== b.id) {
+          return a.id - b.id;
+        }
+        return a.name.localeCompare(b.name, 'pt-BR');
+      });
+
+    console.log(`[investments:sectors/list] Retornando ${sectors.length} setores da API do Effort`);
 
     res.json({
       success: true,
       total: sectors.length,
       sectors,
+      source: equipamentos.length > 0 ? 'effort_api' : 'mapped',
     });
   } catch (e: any) {
+    console.error('[investments:sectors/list] Erro:', e);
     res.status(500).json({ error: true, message: e?.message });
   }
 });
