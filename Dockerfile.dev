@@ -3,8 +3,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Instalar pnpm
-RUN npm install -g pnpm
+# Atualizar npm para versão mais recente e instalar pnpm
+RUN npm install -g npm@latest && \
+    npm install -g pnpm
 
 # Copiar arquivos de dependências
 COPY package.json pnpm-lock.yaml ./

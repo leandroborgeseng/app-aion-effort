@@ -5,8 +5,9 @@ FROM node:20-slim AS frontend-builder
 
 WORKDIR /app
 
-# Instalar pnpm
-RUN npm install -g pnpm
+# Atualizar npm para versão mais recente e instalar pnpm
+RUN npm install -g npm@latest && \
+    npm install -g pnpm
 
 # Copiar arquivos de dependências
 COPY package.json pnpm-lock.yaml ./
@@ -34,8 +35,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends openssl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Instalar pnpm
-RUN npm install -g pnpm
+# Atualizar npm para versão mais recente e instalar pnpm
+RUN npm install -g npm@latest && \
+    npm install -g pnpm
 
 # Copiar arquivos de dependências
 COPY package.json pnpm-lock.yaml ./
@@ -68,8 +70,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends openssl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Instalar pnpm
-RUN npm install -g pnpm
+# Atualizar npm para versão mais recente e instalar pnpm
+RUN npm install -g npm@latest && \
+    npm install -g pnpm
 
 # Criar usuário não-root (sintaxe Debian)
 RUN groupadd -r -g 1001 nodejs && \
