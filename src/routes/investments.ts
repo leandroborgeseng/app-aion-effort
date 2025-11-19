@@ -661,7 +661,8 @@ investments.get('/sectors/list', async (req, res) => {
 
     // Se não encontrou setores na API, usar setores mapeados como fallback
     if (setoresUnicos.size === 0) {
-      console.log('[investments:sectors/list] Nenhum setor encontrado na API, usando mapeamento fixo');
+      console.warn('[investments:sectors/list] ⚠️ NENHUM setor encontrado na API do Effort! Usando mapeamento fixo como fallback');
+      console.warn('[investments:sectors/list] ⚠️ Isso pode indicar problema de conexão com a API ou estrutura de dados diferente');
       
       // Setores básicos do sistema
       const basicSectors: Record<number, string> = {
@@ -682,6 +683,8 @@ investments.get('/sectors/list', async (req, res) => {
       Object.entries(basicSectors).forEach(([idStr, name]) => {
         setoresUnicos.set(name, parseInt(idStr));
       });
+    } else {
+      console.log(`[investments:sectors/list] ✅ Encontrados ${setoresUnicos.size} setores reais da API do Effort`);
     }
 
     // Converter para array ordenado
