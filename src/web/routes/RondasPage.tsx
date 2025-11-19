@@ -56,11 +56,20 @@ export default function RondasPage() {
     mutationFn: async (data: any) => {
       const res = await fetch('/api/ecm/rounds', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
         body: JSON.stringify(data),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ message: 'Erro ao criar ronda' }));
+        
+        // Se for erro de permissão (403), mostrar mensagem específica
+        if (res.status === 403) {
+          throw new Error(errorData.message || 'Você não tem permissão para criar rondas.');
+        }
+        
         throw new Error(errorData.message || 'Erro ao criar ronda');
       }
       return res.json();
@@ -81,12 +90,21 @@ export default function RondasPage() {
       console.log('[RondasPage] Atualizando ronda:', { id, data });
       const res = await fetch(`/api/ecm/rounds/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
         body: JSON.stringify(data),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ message: 'Erro ao atualizar ronda' }));
         console.error('[RondasPage] Erro na resposta:', res.status, errorData);
+        
+        // Se for erro de permissão (403), mostrar mensagem específica
+        if (res.status === 403) {
+          throw new Error(errorData.message || 'Você não tem permissão para atualizar rondas.');
+        }
+        
         throw new Error(errorData.message || 'Erro ao atualizar ronda');
       }
       const result = await res.json();
@@ -110,12 +128,29 @@ export default function RondasPage() {
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/ecm/rounds/${id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
       });
-      if (!res.ok) throw new Error('Erro ao deletar ronda');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: 'Erro ao deletar ronda' }));
+        
+        // Se for erro de permissão (403), mostrar mensagem específica
+        if (res.status === 403) {
+          throw new Error(errorData.message || 'Você não tem permissão para deletar rondas.');
+        }
+        
+        throw new Error(errorData.message || 'Erro ao deletar ronda');
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rounds'] });
+      alert('Ronda deletada com sucesso!');
+    },
+    onError: (error: any) => {
+      console.error('Erro ao deletar ronda:', error);
+      alert(`Erro ao deletar ronda: ${error.message || 'Erro desconhecido'}`);
     },
   });
 
