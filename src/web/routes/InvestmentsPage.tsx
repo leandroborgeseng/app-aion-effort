@@ -750,12 +750,16 @@ function EditableTable({
               backgroundColor: theme.colors.white,
             }}
           >
-            <option value="">Selecione</option>
-            {sectors.map((sector) => (
-              <option key={sector.id} value={sector.id.toString()}>
-                {sector.name}
-              </option>
-            ))}
+            <option value="">Selecione um setor</option>
+            {sectors.length === 0 ? (
+              <option disabled>Carregando setores...</option>
+            ) : (
+              sectors.map((sector) => (
+                <option key={sector.id} value={sector.id.toString()}>
+                  {sector.name} {sector.id ? `(ID: ${sector.id})` : ''}
+                </option>
+              ))
+            )}
           </select>
         );
       }
