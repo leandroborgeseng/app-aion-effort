@@ -621,13 +621,20 @@ investments.get('/sectors/list', async (req, res) => {
       }
     }
 
-    // Buscar equipamentos da API do Effort para extrair setores reais
+    // Buscar equipamentos E OS da API do Effort para extrair setores reais
     const { dataSource } = await import('../adapters/dataSource');
     const { getSectorIdFromName } = await import('../utils/sectorMapping');
     
+    const setoresUnicos = new Map<string, number>();
+    
+    // 1. Buscar setores dos EQUIPAMENTOS
     let equipamentos: any[] = [];
     try {
-      const equipamentosData = await dataSource.equipamentos({});
+      const equipamentosData = await dataSource.equipamentos({
+        apenasAtivos: true,
+        incluirComponentes: false,
+        incluirCustoSubstituicao: false,
+      });
       // Garantir que é um array
       if (Array.isArray(equipamentosData)) {
         equipamentos = equipamentosData;
@@ -635,28 +642,52 @@ investments.get('/sectors/list', async (req, res) => {
         equipamentos = (equipamentosData as any).Itens || (equipamentosData as any).data || (equipamentosData as any).items || [];
       }
       console.log(`[investments:sectors/list] Buscou ${equipamentos.length} equipamentos da API do Effort`);
-    } catch (error: any) {
-      console.error('[investments:sectors/list] Erro ao buscar equipamentos da API:', error?.message);
-      // Se falhar, usar setores mapeados como fallback
-    }
-
-    // Extrair setores únicos dos equipamentos
-    const setoresUnicos = new Map<string, number>();
-    
-    if (equipamentos.length > 0) {
+      
+      // Extrair setores únicos dos equipamentos
       equipamentos.forEach((equip: any) => {
         const setorNome = equip.Setor || equip.setor || '';
         if (setorNome && setorNome.trim() !== '') {
-          // Usar o mapeamento para obter o ID do setor
           const sectorId = getSectorIdFromName(setorNome);
           if (sectorId) {
-            // Se já existe um setor com esse ID, manter o nome mais curto/comum
-            if (!setoresUnicos.has(setorNome)) {
-              setoresUnicos.set(setorNome, sectorId);
-            }
+            // Usar o nome original do setor (não mapear para nome genérico)
+            setoresUnicos.set(setorNome, sectorId);
           }
         }
       });
+      console.log(`[investments:sectors/list] Encontrou ${setoresUnicos.size} setores únicos nos equipamentos`);
+    } catch (error: any) {
+      console.error('[investments:sectors/list] Erro ao buscar equipamentos da API:', error?.message);
+    }
+
+    // 2. Buscar setores das ORDENS DE SERVIÇO (OS)
+    let osList: any[] = [];
+    try {
+      const osData = await dataSource.osResumida({
+        tipoManutencao: 'Todos',
+        periodo: 'MesCorrente',
+      });
+      // Garantir que é um array
+      if (Array.isArray(osData)) {
+        osList = osData;
+      } else if (osData && typeof osData === 'object') {
+        osList = (osData as any).Itens || (osData as any).data || (osData as any).items || [];
+      }
+      console.log(`[investments:sectors/list] Buscou ${osList.length} OS da API do Effort`);
+      
+      // Extrair setores únicos das OS
+      osList.forEach((os: any) => {
+        const setorNome = os.Setor || os.setor || '';
+        if (setorNome && setorNome.trim() !== '') {
+          const sectorId = getSectorIdFromName(setorNome);
+          if (sectorId) {
+            // Usar o nome original do setor (não mapear para nome genérico)
+            setoresUnicos.set(setorNome, sectorId);
+          }
+        }
+      });
+      console.log(`[investments:sectors/list] Total de ${setoresUnicos.size} setores únicos (equipamentos + OS)`);
+    } catch (error: any) {
+      console.error('[investments:sectors/list] Erro ao buscar OS da API:', error?.message);
     }
 
     // Se não encontrou setores na API, usar setores mapeados como fallback
