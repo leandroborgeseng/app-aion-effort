@@ -328,11 +328,25 @@ rounds.post('/', authenticateToken, async (req: AuthRequest, res) => {
 });
 
 // PATCH /api/ecm/rounds/:id - Atualizar ronda
-rounds.patch('/:id', async (req, res) => {
+rounds.patch('/:id', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     console.log('[rounds:PATCH] Atualizando ronda:', id);
     console.log('[rounds:PATCH] Body recebido:', req.body);
+    console.log('[rounds:PATCH] Usuário atual:', req.user);
+    
+    // Verificar permissões: apenas admin e gerente podem atualizar rondas
+    if (!req.user) {
+      return res.status(401).json({ error: true, message: 'Não autenticado' });
+    }
+    
+    if (req.user.role !== 'admin' && req.user.role !== 'gerente') {
+      console.log('[rounds:PATCH] Usuário sem permissão:', req.user.role);
+      return res.status(403).json({ 
+        error: true, 
+        message: 'Você não tem permissão para atualizar rondas. Apenas administradores e gerentes podem fazer isso.' 
+      });
+    }
     
     const {
       sectorId,
