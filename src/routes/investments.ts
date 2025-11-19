@@ -602,7 +602,7 @@ investments.get('/sectors/mapping-report', async (req, res) => {
   }
 });
 
-// GET /api/ecm/investments/sectors/list - Listar todos os setores disponíveis na API do Effort
+// GET /api/ecm/investments/sectors/list - Listar todos os setores configurados no sistema (da tabela UserSector)
 investments.get('/sectors/list', async (req, res) => {
   try {
     // Cache por 10 minutos (setores não mudam frequentemente)
@@ -621,103 +621,69 @@ investments.get('/sectors/list', async (req, res) => {
       }
     }
 
-    // Buscar equipamentos E OS da API do Effort para extrair setores reais
-    const { dataSource } = await import('../adapters/dataSource');
-    const { getSectorIdFromName } = await import('../utils/sectorMapping');
+    const prismaClient = await getPrisma();
     
-    const setoresUnicos = new Map<string, number>();
-    
-    // 1. Buscar setores dos EQUIPAMENTOS
-    let equipamentos: any[] = [];
-    try {
-      const equipamentosData = await dataSource.equipamentos({
-        apenasAtivos: true,
-        incluirComponentes: false,
-        incluirCustoSubstituicao: false,
+    if (USE_MOCK || !prismaClient) {
+      // Fallback para setores mapeados se não tiver Prisma
+      const basicSectors: Record<number, string> = {
+        1: 'UTI 1',
+        2: 'UTI 2',
+        3: 'UTI 3',
+        4: 'Emergência',
+        5: 'Centro Cirúrgico',
+        6: 'Radiologia',
+        7: 'Cardiologia',
+        8: 'Neurologia',
+        9: 'Ortopedia',
+        10: 'Pediatria',
+        11: 'Maternidade',
+        12: 'Ambulatório',
+      };
+
+      const sectors = Object.entries(basicSectors)
+        .map(([idStr, name]) => ({ id: parseInt(idStr), name }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+      return res.json({
+        success: true,
+        total: sectors.length,
+        sectors,
+        source: 'mapped',
       });
-      // Garantir que é um array
-      if (Array.isArray(equipamentosData)) {
-        equipamentos = equipamentosData;
-      } else if (equipamentosData && typeof equipamentosData === 'object') {
-        equipamentos = (equipamentosData as any).Itens || (equipamentosData as any).data || (equipamentosData as any).items || [];
-      }
-      console.log(`[investments:sectors/list] Buscou ${equipamentos.length} equipamentos da API do Effort`);
-      
-      // Extrair setores únicos dos equipamentos
-      let setoresEquipamentos = 0;
-      equipamentos.forEach((equip: any) => {
-        const setorNome = equip.Setor || equip.setor || '';
-        if (setorNome && setorNome.trim() !== '') {
-          const sectorId = getSectorIdFromName(setorNome);
-          if (sectorId) {
-            // Usar o nome original do setor (não mapear para nome genérico)
-            if (!setoresUnicos.has(setorNome)) {
-              setoresUnicos.set(setorNome, sectorId);
-              setoresEquipamentos++;
-            }
-          }
-        }
-      });
-      console.log(`[investments:sectors/list] Encontrou ${setoresEquipamentos} setores únicos nos equipamentos (total acumulado: ${setoresUnicos.size})`);
-      
-      // Debug: mostrar alguns exemplos de setores encontrados
-      if (setoresEquipamentos > 0) {
-        const exemplos = Array.from(setoresUnicos.entries()).slice(0, 5);
-        console.log(`[investments:sectors/list] Exemplos de setores dos equipamentos:`, exemplos.map(([name, id]) => `${name} (ID: ${id})`).join(', '));
-      }
-    } catch (error: any) {
-      console.error('[investments:sectors/list] Erro ao buscar equipamentos da API:', error?.message);
     }
 
-    // 2. Buscar setores das ORDENS DE SERVIÇO (OS)
-    let osList: any[] = [];
-    try {
-      const osData = await dataSource.osResumida({
-        tipoManutencao: 'Todos',
-        periodo: 'MesCorrente',
-      });
-      // Garantir que é um array
-      if (Array.isArray(osData)) {
-        osList = osData;
-      } else if (osData && typeof osData === 'object') {
-        osList = (osData as any).Itens || (osData as any).data || (osData as any).items || [];
-      }
-      console.log(`[investments:sectors/list] Buscou ${osList.length} OS da API do Effort`);
-      
-      // Extrair setores únicos das OS
-      let setoresOS = 0;
-      osList.forEach((os: any) => {
-        const setorNome = os.Setor || os.setor || '';
-        if (setorNome && setorNome.trim() !== '') {
-          const sectorId = getSectorIdFromName(setorNome);
-          if (sectorId) {
-            // Usar o nome original do setor (não mapear para nome genérico)
-            if (!setoresUnicos.has(setorNome)) {
-              setoresUnicos.set(setorNome, sectorId);
-              setoresOS++;
-            }
-          }
-        }
-      });
-      console.log(`[investments:sectors/list] Encontrou ${setoresOS} setores novos nas OS (total acumulado: ${setoresUnicos.size})`);
-      
-      // Debug: mostrar alguns exemplos de setores encontrados
-      if (setoresOS > 0) {
-        const exemplos = Array.from(setoresUnicos.entries()).slice(-5);
-        console.log(`[investments:sectors/list] Exemplos de setores das OS:`, exemplos.map(([name, id]) => `${name} (ID: ${id})`).join(', '));
-      }
-      
-      console.log(`[investments:sectors/list] Total final: ${setoresUnicos.size} setores únicos (${setoresEquipamentos} de equipamentos + ${setoresOS} de OS)`);
-    } catch (error: any) {
-      console.error('[investments:sectors/list] Erro ao buscar OS da API:', error?.message);
-    }
+    // Buscar setores únicos da tabela UserSector (setores configurados para usuários)
+    const userSectors = await prismaClient.userSector.findMany({
+      select: {
+        sectorId: true,
+        sectorName: true,
+      },
+      distinct: ['sectorId'],
+      orderBy: [
+        { sectorId: 'asc' },
+        { sectorName: 'asc' },
+      ],
+    });
 
-    // Se não encontrou setores na API, usar setores mapeados como fallback
+    console.log(`[investments:sectors/list] Encontrados ${userSectors.length} setores únicos na tabela UserSector`);
+
+    // Criar mapa de setores únicos
+    const setoresUnicos = new Map<number, string>();
+    
+    userSectors.forEach((us: any) => {
+      const sectorId = us.sectorId;
+      const sectorName = us.sectorName || `Setor ${sectorId}`;
+      
+      // Se já existe um setor com esse ID, manter o nome mais descritivo (que tenha sectorName)
+      if (!setoresUnicos.has(sectorId) || us.sectorName) {
+        setoresUnicos.set(sectorId, sectorName);
+      }
+    });
+
+    // Se não encontrou setores na tabela UserSector, usar setores mapeados como fallback
     if (setoresUnicos.size === 0) {
-      console.warn('[investments:sectors/list] ⚠️ NENHUM setor encontrado na API do Effort! Usando mapeamento fixo como fallback');
-      console.warn('[investments:sectors/list] ⚠️ Isso pode indicar problema de conexão com a API ou estrutura de dados diferente');
+      console.warn('[investments:sectors/list] ⚠️ NENHUM setor encontrado na tabela UserSector! Usando mapeamento fixo como fallback');
       
-      // Setores básicos do sistema
       const basicSectors: Record<number, string> = {
         1: 'UTI 1',
         2: 'UTI 2',
@@ -734,15 +700,15 @@ investments.get('/sectors/list', async (req, res) => {
       };
 
       Object.entries(basicSectors).forEach(([idStr, name]) => {
-        setoresUnicos.set(name, parseInt(idStr));
+        setoresUnicos.set(parseInt(idStr), name);
       });
     } else {
-      console.log(`[investments:sectors/list] ✅ Encontrados ${setoresUnicos.size} setores reais da API do Effort`);
+      console.log(`[investments:sectors/list] ✅ Encontrados ${setoresUnicos.size} setores configurados no sistema`);
     }
 
     // Converter para array ordenado
     const sectors = Array.from(setoresUnicos.entries())
-      .map(([name, id]) => ({ id, name }))
+      .map(([id, name]) => ({ id, name }))
       .sort((a, b) => {
         // Ordenar primeiro por ID, depois por nome
         if (a.id !== b.id) {
@@ -751,13 +717,13 @@ investments.get('/sectors/list', async (req, res) => {
         return a.name.localeCompare(b.name, 'pt-BR');
       });
 
-    console.log(`[investments:sectors/list] Retornando ${sectors.length} setores da API do Effort`);
+    console.log(`[investments:sectors/list] Retornando ${sectors.length} setores configurados`);
 
     const response = {
       success: true,
       total: sectors.length,
       sectors,
-      source: equipamentos.length > 0 ? 'effort_api' : 'mapped',
+      source: 'user_sectors',
     };
 
     // Salvar no cache
