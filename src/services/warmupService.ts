@@ -12,32 +12,49 @@ interface WarmupTask {
 
 /**
  * Faz warm-up de uma rota específica fazendo uma requisição HTTP interna
+ * Usa fetch para chamar as rotas diretamente, populando o cache
  */
 async function warmupRoute(path: string, name: string): Promise<void> {
   try {
-    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 4000}`;
-    const url = `${baseUrl}${path}`;
+    // Usar localhost para chamadas internas
+    const port = Number(process.env.PORT) || 4000;
+    const url = `http://localhost:${port}${path}`;
     
     console.log(`[warmup] Aquecendo ${name}...`);
     const startTime = Date.now();
     
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // Timeout de 30 segundos
     
-    const duration = Date.now() - startTime;
-    
-    if (response.ok) {
-      await response.json(); // Consumir a resposta para garantir que o cache seja populado
-      console.log(`[warmup] ✅ ${name} aquecido com sucesso (${duration}ms)`);
-    } else {
-      console.warn(`[warmup] ⚠️ ${name} retornou status ${response.status}`);
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      const duration = Date.now() - startTime;
+      
+      if (response.ok) {
+        await response.json(); // Consumir a resposta para garantir que o cache seja populado
+        console.log(`[warmup] ✅ ${name} aquecido com sucesso (${duration}ms)`);
+      } else {
+        const errorText = await response.text().catch(() => '');
+        console.warn(`[warmup] ⚠️ ${name} retornou status ${response.status}: ${errorText.substring(0, 100)}`);
+      }
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.warn(`[warmup] ⏱️ ${name} timeout após 30s`);
+      } else {
+        throw fetchError;
+      }
     }
   } catch (error: any) {
-    console.error(`[warmup] ❌ Erro ao aquecer ${name}:`, error?.message);
+    console.error(`[warmup] ❌ Erro ao aquecer ${name}:`, error?.message || error);
   }
 }
 
@@ -77,6 +94,11 @@ async function performWarmup(): Promise<void> {
     {
       name: 'OS Disponíveis (Fechadas)',
       fn: () => warmupRoute('/api/ecm/rounds/os/available?situacao=Fechada', 'OS Disponíveis (Fechadas)'),
+      enabled: true,
+    },
+    {
+      name: 'OS Disponíveis (Todas)',
+      fn: () => warmupRoute('/api/ecm/rounds/os/available?situacao=Todas', 'OS Disponíveis (Todas)'),
       enabled: true,
     },
     {
