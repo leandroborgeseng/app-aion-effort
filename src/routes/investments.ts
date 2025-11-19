@@ -605,6 +605,22 @@ investments.get('/sectors/mapping-report', async (req, res) => {
 // GET /api/ecm/investments/sectors/list - Listar todos os setores disponíveis na API do Effort
 investments.get('/sectors/list', async (req, res) => {
   try {
+    // Cache por 10 minutos (setores não mudam frequentemente)
+    const CACHE_TTL = 10 * 60 * 1000;
+    const cacheKey = 'investments:sectors:list';
+    
+    // Tentar buscar do cache primeiro
+    const { getCache, setCache } = await import('../services/cacheService');
+    let cachedSectors: any = null;
+    
+    if (!USE_MOCK) {
+      cachedSectors = await getCache(cacheKey, CACHE_TTL);
+      if (cachedSectors) {
+        console.log('[investments:sectors/list] Retornando setores do cache');
+        return res.json(cachedSectors);
+      }
+    }
+
     // Buscar equipamentos da API do Effort para extrair setores reais
     const { dataSource } = await import('../adapters/dataSource');
     const { getSectorIdFromName } = await import('../utils/sectorMapping');
@@ -618,6 +634,7 @@ investments.get('/sectors/list', async (req, res) => {
       } else if (equipamentosData && typeof equipamentosData === 'object') {
         equipamentos = (equipamentosData as any).Itens || (equipamentosData as any).data || (equipamentosData as any).items || [];
       }
+      console.log(`[investments:sectors/list] Buscou ${equipamentos.length} equipamentos da API do Effort`);
     } catch (error: any) {
       console.error('[investments:sectors/list] Erro ao buscar equipamentos da API:', error?.message);
       // Se falhar, usar setores mapeados como fallback
@@ -680,12 +697,19 @@ investments.get('/sectors/list', async (req, res) => {
 
     console.log(`[investments:sectors/list] Retornando ${sectors.length} setores da API do Effort`);
 
-    res.json({
+    const response = {
       success: true,
       total: sectors.length,
       sectors,
       source: equipamentos.length > 0 ? 'effort_api' : 'mapped',
-    });
+    };
+
+    // Salvar no cache
+    if (!USE_MOCK) {
+      await setCache(cacheKey, response);
+    }
+
+    res.json(response);
   } catch (e: any) {
     console.error('[investments:sectors/list] Erro:', e);
     res.status(500).json({ error: true, message: e?.message });
