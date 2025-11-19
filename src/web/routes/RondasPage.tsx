@@ -54,6 +54,18 @@ export default function RondasPage() {
     },
   });
 
+  // Buscar setores disponíveis da API de investimentos
+  const { data: investmentSectors } = useQuery({
+    queryKey: ['investment-sectors'],
+    queryFn: async () => {
+      const res = await fetch('/api/ecm/investments/sectors/list');
+      if (!res.ok) throw new Error('Erro ao buscar setores de investimentos');
+      const data = await res.json();
+      // A API retorna { success, total, sectors } ou pode retornar array direto
+      return data.sectors ? data : { sectors: Array.isArray(data) ? data : [] };
+    },
+  });
+
   const createRoundMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch('/api/ecm/rounds', {
@@ -313,6 +325,7 @@ export default function RondasPage() {
           setOsSituacaoFilter={setOsSituacaoFilter}
           refetchOS={refetchOS}
           refetchInvestments={refetchInvestments}
+          investmentSectors={investmentSectors}
           onSave={(formData) => {
             console.log('[RondasPage] onSave chamado com formData:', formData);
             console.log('[RondasPage] editingId:', editingId);
@@ -564,6 +577,7 @@ function CreateRoundForm({
   setOsSituacaoFilter,
   refetchOS,
   refetchInvestments,
+  investmentSectors,
   onSave,
   onCancel,
 }: {
@@ -573,6 +587,7 @@ function CreateRoundForm({
   setOsSituacaoFilter: (filter: 'Aberta' | 'Fechada' | 'Todas') => void;
   refetchOS: () => void;
   refetchInvestments: () => void;
+  investmentSectors?: any[];
   onSave: (data: any) => void;
   onCancel: () => void;
 }) {
@@ -1039,6 +1054,53 @@ function CreateRoundForm({
             )}
           </div>
         </div>
+
+        {/* Setores Disponíveis da API */}
+        {investmentSectors && investmentSectors.sectors && Array.isArray(investmentSectors.sectors) && investmentSectors.sectors.length > 0 && (
+          <div style={{ marginBottom: theme.spacing.md }}>
+            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              Setores Disponíveis da API ({investmentSectors.sectors.length} setores)
+            </label>
+            <div
+              style={{
+                maxHeight: '150px',
+                overflow: 'auto',
+                border: `1px solid ${theme.colors.gray[300]}`,
+                borderRadius: theme.borderRadius.sm,
+                padding: theme.spacing.sm,
+                backgroundColor: theme.colors.gray[50],
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: theme.spacing.xs,
+              }}
+            >
+              {investmentSectors.sectors.map((sector: any, idx: number) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                    backgroundColor: theme.colors.white,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    borderRadius: theme.borderRadius.xs,
+                    fontSize: '12px',
+                    color: theme.colors.dark,
+                  }}
+                  title={`ID: ${sector.id || 'N/A'}`}
+                >
+                  <strong>{sector.name || 'Setor sem nome'}</strong>
+                  {sector.id && (
+                    <span style={{ marginLeft: theme.spacing.xs, color: theme.colors.gray[600] }}>
+                      (ID: {sector.id})
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p style={{ marginTop: theme.spacing.xs, fontSize: '12px', color: theme.colors.gray[600], fontStyle: 'italic' }}>
+              Estes setores são retornados pela API e podem ser usados para filtros em outros módulos do sistema.
+            </p>
+          </div>
+        )}
 
         {/* Investimentos do Setor */}
         {formData.sectorId && (
