@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { getRoundsResumo } from '../services/roundService';
 import { getCache, setCache, generateCacheKey } from '../services/cacheService';
 import { filterOSByWorkshop } from '../services/workshopFilterService';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -118,8 +119,21 @@ rounds.get('/:id', async (req, res) => {
 });
 
 // POST /api/ecm/rounds - Criar nova ronda
-rounds.post('/', async (req, res) => {
+rounds.post('/', authenticateToken, async (req: AuthRequest, res) => {
   try {
+    // Verificar permissões: apenas admin e gerente podem criar rondas
+    if (!req.user) {
+      return res.status(401).json({ error: true, message: 'Não autenticado' });
+    }
+    
+    if (req.user.role !== 'admin' && req.user.role !== 'gerente') {
+      console.log('[rounds:POST] Usuário sem permissão:', req.user.role);
+      return res.status(403).json({ 
+        error: true, 
+        message: 'Você não tem permissão para criar rondas. Apenas administradores e gerentes podem fazer isso.' 
+      });
+    }
+    
     const {
       sectorId,
       sectorName,
