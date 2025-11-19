@@ -317,6 +317,9 @@ rounds.post('/', async (req, res) => {
 rounds.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('[rounds:PATCH] Atualizando ronda:', id);
+    console.log('[rounds:PATCH] Body recebido:', req.body);
+    
     const {
       sectorId,
       sectorName,
@@ -326,6 +329,7 @@ rounds.patch('/:id', async (req, res) => {
       notes,
       purchaseRequestIds,
       osIds,
+      investmentIds,
     } = req.body;
 
     if (USE_MOCK) {
@@ -408,6 +412,8 @@ rounds.patch('/:id', async (req, res) => {
 
       // Atualizar vínculos de investimentos
       if (investmentIds !== undefined) {
+        console.log('[rounds:PATCH] Atualizando vínculos de investimentos:', investmentIds);
+        
         // Primeiro, remover vínculos de investimentos que não estão mais na lista
         await prismaClient.investment.updateMany({
           where: {
@@ -430,6 +436,8 @@ rounds.patch('/:id', async (req, res) => {
             },
           });
         }
+        
+        console.log('[rounds:PATCH] Vínculos de investimentos atualizados');
       }
 
       res.json(round);
