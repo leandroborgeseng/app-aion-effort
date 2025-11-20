@@ -15,6 +15,309 @@ async function getPrisma() {
 
 export const config = Router();
 
+// ========== SETOR MAPPING (De-Para de Setores) ==========
+
+// GET /api/config/sectors/effort - Listar setores únicos da API do Effort (equipamentos e OS)
+config.get('/sectors/effort', async (req, res) => {
+  try {
+    const { dataSource } = await import('../adapters/dataSource');
+    
+    console.log('[config:sectors/effort] Iniciando busca de setores...');
+    
+    // Buscar equipamentos e OS para extrair setores únicos
+    let equipamentosData: any = null;
+    let osData: any = null;
+    
+    try {
+      equipamentosData = await dataSource.equipamentos({
+        apenasAtivos: false, // Buscar todos, não apenas ativos
+        incluirComponentes: true,
+        incluirCustoSubstituicao: false,
+      });
+      console.log('[config:sectors/effort] Equipamentos recebidos:', {
+        isArray: Array.isArray(equipamentosData),
+        hasItens: !!(equipamentosData as any)?.Itens,
+        hasData: !!(equipamentosData as any)?.data,
+        type: typeof equipamentosData,
+        length: Array.isArray(equipamentosData) ? equipamentosData.length : 'N/A',
+      });
+    } catch (err: any) {
+      console.error('[config:sectors/effort] Erro ao buscar equipamentos:', err?.message);
+      console.error('[config:sectors/effort] Stack:', err?.stack);
+      equipamentosData = [];
+    }
+    
+    try {
+      osData = await dataSource.osResumida({
+        tipoManutencao: 'Todos',
+        periodo: 'AnoCorrente',
+        pagina: 0,
+        qtdPorPagina: 10000,
+      });
+      console.log('[config:sectors/effort] OS recebidas:', {
+        isArray: Array.isArray(osData),
+        hasItens: !!(osData as any)?.Itens,
+        hasData: !!(osData as any)?.data,
+        type: typeof osData,
+      });
+    } catch (err: any) {
+      console.error('[config:sectors/effort] Erro ao buscar OS:', err?.message);
+      osData = [];
+    }
+
+    // Processar equipamentos
+    const equipamentosArray = Array.isArray(equipamentosData) 
+      ? equipamentosData 
+      : (equipamentosData as any)?.Itens || (equipamentosData as any)?.data || (equipamentosData as any)?.items || [];
+    
+    // Processar OS
+    const osArray = Array.isArray(osData)
+      ? osData
+      : (osData as any)?.Itens || (osData as any)?.data || (osData as any)?.items || [];
+
+    console.log('[config:sectors/effort] Processamento:', {
+      equipamentosCount: equipamentosArray.length,
+      osCount: osArray.length,
+      primeiroEquipamento: equipamentosArray[0] ? Object.keys(equipamentosArray[0]) : [],
+      primeiraOS: osArray[0] ? Object.keys(osArray[0]) : [],
+    });
+
+    // Extrair setores únicos de equipamentos
+    const setoresEquipamentos = new Map<string, { name: string; id?: number; source: string }>();
+    equipamentosArray.forEach((eq: any) => {
+      // Tentar diferentes variações do campo Setor
+      const setorNome = eq.Setor?.trim() || eq.setor?.trim() || eq.SETOR?.trim() || '';
+      const setorId = eq.SetorId || eq.setorId || eq.SETOR_ID || eq.SetorCodigo || eq.setorCodigo;
+      
+      if (setorNome && setorNome !== '') {
+        const key = `${setorNome}|${setorId || ''}`;
+        if (!setoresEquipamentos.has(key)) {
+          setoresEquipamentos.set(key, {
+            name: setorNome,
+            id: setorId ? Number(setorId) : undefined,
+            source: 'equipamentos',
+          });
+        }
+      }
+    });
+
+    // Extrair setores únicos de OS
+    const setoresOS = new Map<string, { name: string; id?: number; source: string }>();
+    osArray.forEach((os: any) => {
+      // Tentar diferentes variações do campo Setor
+      const setorNome = os.Setor?.trim() || os.setor?.trim() || os.SETOR?.trim() || '';
+      const setorId = os.SetorId || os.setorId || os.SETOR_ID || os.SetorCodigo || os.setorCodigo;
+      
+      if (setorNome && setorNome !== '') {
+        const key = `${setorNome}|${setorId || ''}`;
+        if (!setoresOS.has(key)) {
+          setoresOS.set(key, {
+            name: setorNome,
+            id: setorId ? Number(setorId) : undefined,
+            source: 'os',
+          });
+        }
+      }
+    });
+
+    console.log('[config:sectors/effort] Setores extraídos:', {
+      equipamentos: setoresEquipamentos.size,
+      os: setoresOS.size,
+    });
+
+    // Combinar e marcar setores que aparecem em ambos
+    const setoresCombinados = new Map<string, { name: string; id?: number; sources: string[] }>();
+    
+    setoresEquipamentos.forEach((setor, key) => {
+      setoresCombinados.set(key, {
+        name: setor.name,
+        id: setor.id,
+        sources: [setor.source],
+      });
+    });
+
+    setoresOS.forEach((setor, key) => {
+      if (setoresCombinados.has(key)) {
+        const existente = setoresCombinados.get(key)!;
+        if (!existente.sources.includes(setor.source)) {
+          existente.sources.push(setor.source);
+        }
+      } else {
+        setoresCombinados.set(key, {
+          name: setor.name,
+          id: setor.id,
+          sources: [setor.source],
+        });
+      }
+    });
+
+    // Converter para array e ordenar
+    const setoresArray = Array.from(setoresCombinados.values())
+      .map((s) => ({
+        name: s.name,
+        id: s.id,
+        source: s.sources.includes('equipamentos') && s.sources.includes('os') ? 'both' : s.sources[0],
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+    console.log('[config:sectors/effort] Setores finais:', {
+      total: setoresArray.length,
+      amostra: setoresArray.slice(0, 5),
+    });
+
+    res.json({
+      success: true,
+      total: setoresArray.length,
+      sectors: setoresArray,
+    });
+  } catch (e: any) {
+    console.error('[config:sectors/effort] Erro:', e);
+    console.error('[config:sectors/effort] Stack:', e?.stack);
+    res.status(500).json({ 
+      error: true, 
+      message: e?.message || 'Erro ao buscar setores da API do Effort',
+      details: process.env.NODE_ENV === 'development' ? e?.stack : undefined,
+    });
+  }
+});
+
+// GET /api/config/sectors/mappings - Listar mapeamentos de setores
+config.get('/sectors/mappings', async (req, res) => {
+  try {
+    if (USE_MOCK) {
+      return res.json({ success: true, mappings: [] });
+    }
+
+    const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+    }
+
+    const mappings = await prismaClient.sectorMapping.findMany({
+      where: {
+        active: true,
+      },
+      orderBy: [
+        { effortSectorName: 'asc' },
+        { createdAt: 'desc' },
+      ],
+    });
+
+    res.json({
+      success: true,
+      total: mappings.length,
+      mappings,
+    });
+  } catch (e: any) {
+    console.error('[config:sectors/mappings] Erro:', e);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao buscar mapeamentos' });
+  }
+});
+
+// POST /api/config/sectors/mappings - Criar ou atualizar mapeamento
+config.post('/sectors/mappings', async (req, res) => {
+  try {
+    const { effortSectorName, effortSectorId, systemSectorId, systemSectorName, source } = req.body;
+
+    if (!effortSectorName || !systemSectorId) {
+      return res.status(400).json({ error: true, message: 'effortSectorName e systemSectorId são obrigatórios' });
+    }
+
+    if (USE_MOCK) {
+      return res.json({ success: true, message: 'Mapeamento criado (mock)' });
+    }
+
+    const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+    }
+
+    // Buscar nome do setor do sistema se não fornecido
+    let finalSystemSectorName = systemSectorName;
+    if (!finalSystemSectorName) {
+      const userSector = await prismaClient.userSector.findFirst({
+        where: { sectorId: systemSectorId },
+        select: { sectorName: true },
+      });
+      finalSystemSectorName = userSector?.sectorName || `Setor ${systemSectorId}`;
+    }
+
+    // Verificar se já existe mapeamento
+    const existing = await prismaClient.sectorMapping.findFirst({
+      where: {
+        effortSectorName,
+        effortSectorId: effortSectorId || null,
+        systemSectorId,
+        active: true,
+      },
+    });
+
+    if (existing) {
+      // Atualizar existente
+      const updated = await prismaClient.sectorMapping.update({
+        where: { id: existing.id },
+        data: {
+          effortSectorId: effortSectorId || null,
+          systemSectorName: finalSystemSectorName,
+          source: source || 'both',
+          updatedAt: new Date(),
+        },
+      });
+      return res.json({ success: true, mapping: updated });
+    } else {
+      // Criar novo
+      const created = await prismaClient.sectorMapping.create({
+        data: {
+          effortSectorName,
+          effortSectorId: effortSectorId || null,
+          systemSectorId,
+          systemSectorName: finalSystemSectorName,
+          source: source || 'both',
+          active: true,
+        },
+      });
+      // Invalidar cache de mapeamentos
+      const { invalidateMappingsCache } = await import('../utils/sectorMappingService');
+      invalidateMappingsCache();
+      
+      return res.json({ success: true, mapping: created });
+    }
+  } catch (e: any) {
+    console.error('[config:sectors/mappings:POST] Erro:', e);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao salvar mapeamento' });
+  }
+});
+
+// DELETE /api/config/sectors/mappings/:id - Deletar mapeamento
+config.delete('/sectors/mappings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (USE_MOCK) {
+      return res.json({ success: true, message: 'Mapeamento deletado (mock)' });
+    }
+
+    const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+    }
+
+    await prismaClient.sectorMapping.update({
+      where: { id },
+      data: { active: false },
+    });
+
+    // Invalidar cache de mapeamentos
+    const { invalidateMappingsCache } = await import('../utils/sectorMappingService');
+    invalidateMappingsCache();
+
+    res.json({ success: true, message: 'Mapeamento removido' });
+  } catch (e: any) {
+    console.error('[config:sectors/mappings:DELETE] Erro:', e);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao remover mapeamento' });
+  }
+});
+
 // GET /api/config/maintenance-types - Listar tipos de manutenção configurados
 config.get('/maintenance-types', async (req, res) => {
   try {

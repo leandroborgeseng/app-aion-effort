@@ -266,3 +266,22 @@ model Session {
   @@index([token])
   @@index([expiresAt])
 }
+
+model SectorMapping {
+  id                String   @id @default(cuid())
+  effortSectorName  String   // Nome do setor como vem da API do Effort
+  effortSectorId    Int?     // ID do setor da API do Effort (se disponível)
+  systemSectorId    Int      // ID do setor no sistema (mapeado para UserSector)
+  systemSectorName  String?  // Nome do setor no sistema (cache)
+  source            String   // 'equipamentos' | 'os' | 'both'
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?  // ID do usuário que criou o mapeamento
+
+  @@unique([effortSectorName, effortSectorId, systemSectorId])
+  @@index([effortSectorName])
+  @@index([effortSectorId])
+  @@index([systemSectorId])
+  @@index([active])
+}

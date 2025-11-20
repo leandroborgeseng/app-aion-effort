@@ -15,6 +15,7 @@ import {
   FiArrowUp,
   FiArrowDown,
 } from 'react-icons/fi';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { theme } from '../styles/theme';
 import { formatBrazilianDate } from '../utils/dateUtils';
 import toast from 'react-hot-toast';
@@ -50,25 +51,13 @@ interface Sector {
 export default function InvestmentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<{ status?: string; categoria?: string }>({});
+  const [filters, setFilters] = useState<{ status?: string; categoria?: string; setor?: string }>({});
   const [showFilters, setShowFilters] = useState(false);
 
   const queryClient = useQueryClient();
 
-  const { data: investments, isLoading, error } = useQuery<Investment[]>({
-    queryKey: ['investments', filters],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (filters.status) params.append('status', filters.status);
-      if (filters.categoria) params.append('categoria', filters.categoria);
-      const res = await fetch(`/api/ecm/investments?${params.toString()}`);
-      if (!res.ok) throw new Error('Erro ao buscar investimentos');
-      return res.json();
-    },
-  });
-
-  // Buscar setores disponíveis da API
-  const { data: sectorsData, isLoading: sectorsLoading, error: sectorsError } = useQuery<{ sectors: Sector[] }>({
+  // Buscar setores disponíveis da API do Effort PRIMEIRO
+  const { data: sectorsData, isLoading: sectorsLoading, error: sectorsError } = useQuery<{ success: boolean; total: number; sectors: Sector[] }>({
     queryKey: ['investment-sectors'],
     queryFn: async () => {
       const res = await fetch('/api/ecm/investments/sectors/list');
@@ -77,20 +66,57 @@ export default function InvestmentsPage() {
         throw new Error(errorData.message || 'Erro ao buscar setores');
       }
       const data = await res.json();
-      // A API retorna { success, total, sectors } ou pode retornar array direto
+      console.log('[InvestmentsPage] Setores recebidos da API:', data);
+      
+      // A API retorna { success, total, sectors, source: 'effort-api' }
       if (data.sectors && Array.isArray(data.sectors)) {
-        return { sectors: data.sectors };
+        return { success: data.success || true, total: data.total || data.sectors.length, sectors: data.sectors };
       }
       if (Array.isArray(data)) {
-        return { sectors: data };
+        return { success: true, total: data.length, sectors: data };
       }
-      return { sectors: [] };
+      console.warn('[InvestmentsPage] Formato de dados inesperado:', data);
+      return { success: false, total: 0, sectors: [] };
     },
     retry: 2,
-    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+    staleTime: 0, // Sempre buscar dados atualizados (sem cache)
+    refetchOnWindowFocus: true, // Recarregar ao focar na janela para garantir dados atualizados
+    refetchOnMount: true, // Sempre recarregar ao montar o componente
   });
 
   const sectors = sectorsData?.sectors || [];
+
+  // Buscar investimentos DEPOIS dos setores
+  const { data: investments, isLoading, error } = useQuery<Investment[]>({
+    queryKey: ['investments', filters, sectors],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.status) params.append('status', filters.status);
+      if (filters.categoria) params.append('categoria', filters.categoria);
+      // Converter nome do setor para sectorId se necessário
+      if (filters.setor && sectors.length > 0) {
+        const sector = sectors.find((s) => s.name === filters.setor);
+        if (sector) {
+          params.append('sectorId', sector.id.toString());
+        }
+      }
+      const res = await fetch(`/api/ecm/investments?${params.toString()}`);
+      if (!res.ok) throw new Error('Erro ao buscar investimentos');
+      const data = await res.json();
+      console.log('[InvestmentsPage] Investimentos recebidos:', data.length, 'filtro:', filters.setor);
+      return data;
+    },
+    enabled: true, // Sempre habilitado
+  });
+  
+  // Debug: log dos setores processados
+  useEffect(() => {
+    console.log('[InvestmentsPage] Setores processados:', sectors);
+    console.log('[InvestmentsPage] Total de setores:', sectors.length);
+    if (sectors.length > 0) {
+      console.log('[InvestmentsPage] Primeiros 5 setores:', sectors.slice(0, 5));
+    }
+  }, [sectors]);
 
   const createMutation = useMutation({
     mutationFn: async (data: Partial<Investment>) => {
@@ -181,6 +207,64 @@ export default function InvestmentsPage() {
     acc[inv.status] = (acc[inv.status] || 0) + 1;
     return acc;
   }, {}) || {};
+
+  // Agregar investimentos por setor para o gráfico (Top 10)
+  const investmentsBySector = useMemo(() => {
+    if (!investments || !sectors.length) return [];
+    
+    const sectorMap = new Map<string, { name: string; count: number; value: number }>();
+    
+    // Inicializar todos os setores com 0
+    sectors.forEach((sector) => {
+      sectorMap.set(sector.name, { name: sector.name, count: 0, value: 0 });
+    });
+    
+    // Agregar investimentos por setor
+    investments.forEach((inv) => {
+      const sectorName = inv.setor || 'Sem Setor';
+      const current = sectorMap.get(sectorName) || { name: sectorName, count: 0, value: 0 };
+      sectorMap.set(sectorName, {
+        name: sectorName,
+        count: current.count + 1,
+        value: current.value + inv.valorEstimado,
+      });
+    });
+    
+    return Array.from(sectorMap.values())
+      .filter((item) => item.count > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10); // Limitar aos top 10 setores
+  }, [investments, sectors]);
+
+  // Cores para o gráfico (gerar cores dinamicamente)
+  const COLORS = [
+    theme.colors.primary,
+    theme.colors.success,
+    theme.colors.warning,
+    theme.colors.danger,
+    theme.colors.info,
+    '#8B5CF6',
+    '#EC4899',
+    '#14B8A6',
+    '#F59E0B',
+    '#6366F1',
+  ];
+
+  // Handler para clique no gráfico
+  const handleSectorClick = (sectorName: string) => {
+    console.log('[InvestmentsPage] Clique no setor:', sectorName);
+    console.log('[InvestmentsPage] Filtro atual:', filters.setor);
+    
+    if (filters.setor === sectorName) {
+      // Se já está filtrado por esse setor, remove o filtro
+      console.log('[InvestmentsPage] Removendo filtro de setor');
+      setFilters({ ...filters, setor: undefined });
+    } else {
+      // Filtra por esse setor
+      console.log('[InvestmentsPage] Aplicando filtro de setor:', sectorName);
+      setFilters({ ...filters, setor: sectorName });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -330,8 +414,8 @@ export default function InvestmentsPage() {
         ))}
       </div>
 
-      {/* Setores Disponíveis da API */}
-      {sectors && sectors.length > 0 && (
+      {/* Gráfico de Investimentos por Setor */}
+      {investmentsBySector.length > 0 && (
         <div
           style={{
             backgroundColor: theme.colors.white,
@@ -341,70 +425,159 @@ export default function InvestmentsPage() {
             marginBottom: theme.spacing.xl,
           }}
         >
-          <div style={{ marginBottom: theme.spacing.md }}>
-            <h2
-              style={{
-                margin: 0,
-                marginBottom: theme.spacing.xs,
-                fontSize: '18px',
-                fontWeight: 600,
-                color: theme.colors.dark,
-                display: 'flex',
-                alignItems: 'center',
-                gap: theme.spacing.xs,
-              }}
-            >
-              <FiTag size={20} color={theme.colors.primary} />
-              Setores Disponíveis da API ({sectors.length} setores)
-            </h2>
-            <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600], fontStyle: 'italic' }}>
-              Estes setores são retornados pela API e podem ser usados para filtros em outros módulos do sistema.
-            </p>
-          </div>
-          <div
+          <h2
             style={{
+              margin: 0,
+              marginBottom: theme.spacing.md,
+              fontSize: '20px',
+              fontWeight: 600,
+              color: theme.colors.dark,
               display: 'flex',
-              flexWrap: 'wrap',
+              alignItems: 'center',
               gap: theme.spacing.sm,
-              maxHeight: '200px',
-              overflow: 'auto',
-              padding: theme.spacing.sm,
-              backgroundColor: theme.colors.gray[50],
-              borderRadius: theme.borderRadius.sm,
             }}
           >
-            {sectors.map((sector: Sector, idx: number) => (
-              <div
-                key={idx}
+            <FiTrendingUp size={24} color={theme.colors.primary} />
+            Top 10 Setores em Investimentos
+          </h2>
+          {filters.setor && (
+            <div
+              style={{
+                marginBottom: theme.spacing.md,
+                padding: theme.spacing.sm,
+                backgroundColor: `${theme.colors.primary}15`,
+                borderRadius: theme.borderRadius.sm,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <span style={{ fontSize: '14px', color: theme.colors.dark }}>
+                Filtrado por: <strong>{filters.setor}</strong>
+              </span>
+              <button
+                onClick={() => setFilters({ ...filters, setor: undefined })}
                 style={{
-                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
                   backgroundColor: theme.colors.white,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   borderRadius: theme.borderRadius.sm,
-                  fontSize: '13px',
-                  color: theme.colors.dark,
+                  cursor: 'pointer',
+                  fontSize: '12px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: theme.spacing.xs,
-                  boxShadow: theme.shadows.xs,
                 }}
-                title={`ID: ${sector.id || 'N/A'}`}
               >
-                <strong>{sector.name || 'Setor sem nome'}</strong>
-                {sector.id && (
-                  <span
-                    style={{
-                      padding: `2px ${theme.spacing.xs}`,
-                      backgroundColor: theme.colors.primary + '20',
-                      color: theme.colors.primary,
-                      borderRadius: theme.borderRadius.xs,
-                      fontSize: '11px',
-                      fontWeight: 600,
-                    }}
-                  >
-                    ID: {sector.id}
-                  </span>
-                )}
+                <FiX size={14} />
+                Remover filtro
+              </button>
+            </div>
+          )}
+          <div style={{ width: '100%', height: '400px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={investmentsBySector}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                  outerRadius={120}
+                  fill="#8884d8"
+                  dataKey="value"
+                  onClick={(data: any, index: number) => {
+                    console.log('[InvestmentsPage] Clique no Pie:', data, index);
+                    // O recharts passa o objeto de dados completo no evento onClick
+                    const sectorName = data?.name || data?.payload?.name || investmentsBySector[index]?.name;
+                    if (sectorName) {
+                      handleSectorClick(sectorName);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {investmentsBySector.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                      style={{
+                        opacity: filters.setor && filters.setor !== entry.name ? 0.3 : 1,
+                        transition: 'opacity 0.2s',
+                      }}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: theme.colors.white,
+                    border: `1px solid ${theme.colors.gray[200]}`,
+                    borderRadius: theme.borderRadius.md,
+                    boxShadow: theme.shadows.md,
+                  }}
+                  formatter={(value: number, name: string, props: any) => [
+                    formatCurrency(value),
+                    `Valor Total (${props.payload.count} investimento${props.payload.count !== 1 ? 's' : ''})`,
+                  ]}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: '14px' }}
+                  formatter={(value, entry: any) => (
+                    <span
+                      style={{
+                        color: filters.setor && filters.setor !== entry.payload.name ? theme.colors.gray[400] : theme.colors.dark,
+                        cursor: 'pointer',
+                        fontWeight: filters.setor === entry.payload.name ? 600 : 400,
+                      }}
+                      onClick={() => handleSectorClick(entry.payload.name)}
+                    >
+                      {value} ({entry.payload.count})
+                    </span>
+                  )}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Estatísticas resumidas - Top 10 */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: theme.spacing.md,
+              marginTop: theme.spacing.lg,
+              paddingTop: theme.spacing.lg,
+              borderTop: `1px solid ${theme.colors.gray[200]}`,
+            }}
+          >
+            {investmentsBySector.map((sector, index) => (
+              <div
+                key={sector.name}
+                style={{
+                  textAlign: 'center',
+                  padding: theme.spacing.sm,
+                  backgroundColor: filters.setor === sector.name ? `${COLORS[index % COLORS.length]}15` : 'transparent',
+                  borderRadius: theme.borderRadius.sm,
+                  border: filters.setor === sector.name ? `2px solid ${COLORS[index % COLORS.length]}` : 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onClick={() => handleSectorClick(sector.name)}
+              >
+                <div
+                  style={{
+                    fontSize: '24px',
+                    fontWeight: 700,
+                    color: COLORS[index % COLORS.length],
+                    marginBottom: theme.spacing.xs,
+                  }}
+                >
+                  {sector.count}
+                </div>
+                <div style={{ fontSize: '12px', color: theme.colors.gray[600], marginBottom: theme.spacing.xs }}>
+                  {sector.name}
+                </div>
+                <div style={{ fontSize: '11px', color: theme.colors.gray[500] }}>
+                  {formatCurrency(sector.value)}
+                </div>
               </div>
             ))}
           </div>
@@ -448,7 +621,6 @@ export default function InvestmentsPage() {
             onChange={(e) => setFilters({ ...filters, categoria: e.target.value || undefined })}
             style={{
               padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-              borderRadius: theme.borderRadius.sm,
               border: `1px solid ${theme.colors.gray[300]}`,
               fontSize: '14px',
             }}
@@ -457,6 +629,22 @@ export default function InvestmentsPage() {
             {categorias.map((c) => (
               <option key={c} value={c}>
                 {c}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.setor || ''}
+            onChange={(e) => setFilters({ ...filters, setor: e.target.value || undefined })}
+            style={{
+              padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+              border: `1px solid ${theme.colors.gray[300]}`,
+              fontSize: '14px',
+            }}
+          >
+            <option value="">Todos os Setores</option>
+            {sectors.map((s) => (
+              <option key={s.id} value={s.name}>
+                {s.name}
               </option>
             ))}
           </select>
@@ -512,6 +700,7 @@ export default function InvestmentsPage() {
           categorias={categorias}
           prioridades={prioridades}
           statuses={statuses}
+          filters={filters}
           onUpdate={(id, data) => {
             updateMutation.mutate({ id, data });
           }}
@@ -550,6 +739,7 @@ function EditableTable({
   categorias,
   prioridades,
   statuses,
+  filters,
   onUpdate,
   onDelete,
   formatCurrency,
@@ -562,6 +752,7 @@ function EditableTable({
   categorias: string[];
   prioridades: string[];
   statuses: string[];
+  filters?: { status?: string; categoria?: string; setor?: string };
   onUpdate: (id: string, data: Partial<Investment>) => void;
   onDelete: (id: string) => void;
   formatCurrency: (value: number) => string;
@@ -571,8 +762,40 @@ function EditableTable({
 }) {
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: string } | null>(null);
   const [editedData, setEditedData] = useState<Record<string, Partial<Investment>>>({});
-  const [localInvestments, setLocalInvestments] = useState<Investment[]>(investments);
   const [sortConfig, setSortConfig] = useState<{ field: string; direction: 'asc' | 'desc' } | null>(null);
+
+  // Filtrar investimentos localmente como fallback
+  const filteredInvestments = useMemo(() => {
+    let filtered = [...investments];
+    
+    if (filters?.setor) {
+      filtered = filtered.filter((inv) => inv.setor === filters.setor);
+      console.log('[EditableTable] Filtrando por setor:', filters.setor, 'Resultado:', filtered.length, 'de', investments.length);
+    }
+    
+    if (filters?.status) {
+      filtered = filtered.filter((inv) => inv.status === filters.status);
+    }
+    
+    if (filters?.categoria) {
+      filtered = filtered.filter((inv) => inv.categoria === filters.categoria);
+    }
+    
+    return filtered;
+  }, [investments, filters]);
+
+  const [localInvestments, setLocalInvestments] = useState<Investment[]>(filteredInvestments);
+
+  // Sincronizar localInvestments quando filteredInvestments mudar
+  useEffect(() => {
+    console.log('[EditableTable] Atualizando investimentos locais:', filteredInvestments.length);
+    setLocalInvestments(filteredInvestments);
+  }, [filteredInvestments]);
+
+  // Sincronizar localInvestments quando investments mudar (incluindo filtros)
+  useEffect(() => {
+    setLocalInvestments(investments);
+  }, [investments]);
 
   // Função de ordenação
   const handleSort = (field: string) => {

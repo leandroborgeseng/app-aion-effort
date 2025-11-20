@@ -145,51 +145,45 @@ critical.get('/kpi', async (req, res) => {
     
     let kpi = await calcKpisCriticosMes(year, month);
     
-    // Função auxiliar para obter SetorId do equipamento
-    const getEquipamentoSectorId = (eq: any): number | null => {
-      if (eq.SetorId) return eq.SetorId;
-      if (eq.Setor) {
-        const sectorNameToIdMap: Record<string, number> = {
-          'UTI 1': 1, 'UTI 2': 2, 'UTI 3': 3, 'Emergência': 4,
-          'Centro Cirúrgico': 5, 'Radiologia': 6, 'Cardiologia': 7,
-          'Neurologia': 8, 'Ortopedia': 9, 'Pediatria': 10,
-          'Maternidade': 11, 'Ambulatório': 12,
-        };
-        if (sectorNameToIdMap[eq.Setor]) return sectorNameToIdMap[eq.Setor];
-        let hash = 0;
-        for (let i = 0; i < eq.Setor.length; i++) {
-          hash = ((hash << 5) - hash) + eq.Setor.charCodeAt(i);
-          hash = hash & hash;
-        }
-        return Math.abs(hash % 999) + 1;
-      }
-      return null;
-    };
-
-    // Filtrar por setores se fornecido
+    // Filtrar por setores se fornecido (usando nomes de setores diretamente da API)
     if (setoresFilter && setoresFilter.length > 0 && kpi) {
-      // Buscar equipamentos para filtrar
-      const { dataSource } = await import('../adapters/dataSource');
-      const equipamentos = await dataSource.equipamentos({
-        apenasAtivos: true,
-        incluirComponentes: false,
-        incluirCustoSubstituicao: false,
-      });
+      // Buscar nomes dos setores do sistema para fazer o filtro
+      const sectorsRes = await fetch(`${req.protocol}://${req.get('host')}/api/ecm/investments/sectors/list`);
+      const sectorsData = sectorsRes.ok ? await sectorsRes.json() : { sectors: [] };
+      const sectorNames = new Set(
+        sectorsData.sectors
+          ?.filter((s: any) => setoresFilter.includes(s.id))
+          .map((s: any) => s.name.toLowerCase()) || []
+      );
 
-      const equipamentosPermitidos = new Set<number>();
-      equipamentos.forEach((eq: any) => {
-        const sectorId = getEquipamentoSectorId(eq);
-        if (sectorId !== null && setoresFilter.includes(sectorId)) {
-          equipamentosPermitidos.add(eq.Id);
-        }
-      });
-
-      // Filtrar KPIs baseados em equipamentos dos setores permitidos
-      // A lógica depende da estrutura do KPI retornado
-      if (kpi.equipamentos && Array.isArray(kpi.equipamentos)) {
-        kpi.equipamentos = kpi.equipamentos.filter((eq: any) => {
-          return eq.Id && equipamentosPermitidos.has(eq.Id);
+      if (sectorNames.size > 0) {
+        // Buscar equipamentos para filtrar
+        const { dataSource } = await import('../adapters/dataSource');
+        const equipamentos = await dataSource.equipamentos({
+          apenasAtivos: true,
+          incluirComponentes: false,
+          incluirCustoSubstituicao: false,
         });
+
+        const equipamentosArray = Array.isArray(equipamentos) 
+          ? equipamentos 
+          : (equipamentos as any)?.Itens || (equipamentos as any)?.data || [];
+
+        // Filtrar equipamentos por nome do setor
+        const equipamentosPermitidos = new Set<number>();
+        equipamentosArray.forEach((eq: any) => {
+          const eqSetor = (eq.Setor || eq.setor || eq.SETOR || '').trim().toLowerCase();
+          if (eqSetor && sectorNames.has(eqSetor) && eq.Id) {
+            equipamentosPermitidos.add(eq.Id);
+          }
+        });
+
+        // Filtrar KPIs baseados em equipamentos dos setores permitidos
+        if (kpi.equipamentos && Array.isArray(kpi.equipamentos)) {
+          kpi.equipamentos = kpi.equipamentos.filter((eq: any) => {
+            return eq.Id && equipamentosPermitidos.has(eq.Id);
+          });
+        }
       }
     }
     
@@ -317,35 +311,25 @@ critical.get('/equipamentos', async (req, res) => {
       criticalIds.includes(eq.Id)
     );
 
-    // Função auxiliar para obter SetorId do equipamento
-    const getEquipamentoSectorId = (eq: any): number | null => {
-      if (eq.SetorId) return eq.SetorId;
-      if (eq.Setor) {
-        const sectorNameToIdMap: Record<string, number> = {
-          'UTI 1': 1, 'UTI 2': 2, 'UTI 3': 3, 'Emergência': 4,
-          'Centro Cirúrgico': 5, 'Radiologia': 6, 'Cardiologia': 7,
-          'Neurologia': 8, 'Ortopedia': 9, 'Pediatria': 10,
-          'Maternidade': 11, 'Ambulatório': 12,
-        };
-        if (sectorNameToIdMap[eq.Setor]) return sectorNameToIdMap[eq.Setor];
-        let hash = 0;
-        for (let i = 0; i < eq.Setor.length; i++) {
-          hash = ((hash << 5) - hash) + eq.Setor.charCodeAt(i);
-          hash = hash & hash;
-        }
-        return Math.abs(hash % 999) + 1;
-      }
-      return null;
-    };
-
-    // Filtrar por setores se fornecido
+    // Filtrar por setores se fornecido (usando nomes de setores diretamente da API)
     if (setoresFilter && setoresFilter.length > 0) {
-      equipamentosCriticos = equipamentosCriticos.filter((eq: any) => {
-        const sectorId = getEquipamentoSectorId(eq);
-        return sectorId !== null && setoresFilter.includes(sectorId);
-      });
-      console.log('[critical:equipamentos] Filtro de setores:', setoresFilter);
-      console.log('[critical:equipamentos] Equipamentos críticos filtrados:', equipamentosCriticos.length);
+      // Buscar nomes dos setores do sistema para fazer o filtro
+      const sectorsRes = await fetch(`${req.protocol}://${req.get('host')}/api/ecm/investments/sectors/list`);
+      const sectorsData = sectorsRes.ok ? await sectorsRes.json() : { sectors: [] };
+      const sectorNames = new Set(
+        sectorsData.sectors
+          ?.filter((s: any) => setoresFilter.includes(s.id))
+          .map((s: any) => s.name.toLowerCase()) || []
+      );
+
+      if (sectorNames.size > 0) {
+        equipamentosCriticos = equipamentosCriticos.filter((eq: any) => {
+          const eqSetor = (eq.Setor || eq.setor || eq.SETOR || '').trim().toLowerCase();
+          return eqSetor && sectorNames.has(eqSetor);
+        });
+        console.log('[critical:equipamentos] Filtro de setores:', Array.from(sectorNames));
+        console.log('[critical:equipamentos] Equipamentos críticos filtrados:', equipamentosCriticos.length);
+      }
     }
 
     // Buscar custos e KPIs
@@ -459,34 +443,24 @@ critical.get('/uptime/aggregated', async (req, res) => {
         incluirCustoSubstituicao: false,
       });
 
-      // Função auxiliar para obter SetorId do equipamento
-      const getEquipamentoSectorId = (eq: any): number | null => {
-        if (eq.SetorId) return eq.SetorId;
-        if (eq.Setor) {
-          const sectorNameToIdMap: Record<string, number> = {
-            'UTI 1': 1, 'UTI 2': 2, 'UTI 3': 3, 'Emergência': 4,
-            'Centro Cirúrgico': 5, 'Radiologia': 6, 'Cardiologia': 7,
-            'Neurologia': 8, 'Ortopedia': 9, 'Pediatria': 10,
-            'Maternidade': 11, 'Ambulatório': 12,
-          };
-          if (sectorNameToIdMap[eq.Setor]) return sectorNameToIdMap[eq.Setor];
-          let hash = 0;
-          for (let i = 0; i < eq.Setor.length; i++) {
-            hash = ((hash << 5) - hash) + eq.Setor.charCodeAt(i);
-            hash = hash & hash;
-          }
-          return Math.abs(hash % 999) + 1;
-        }
-        return null;
-      };
+      // Buscar nomes dos setores do sistema para fazer o filtro
+      const sectorsRes = await fetch(`${req.protocol}://${req.get('host')}/api/ecm/investments/sectors/list`);
+      const sectorsData = sectorsRes.ok ? await sectorsRes.json() : { sectors: [] };
+      const sectorNames = new Set(
+        sectorsData.sectors
+          ?.filter((s: any) => setoresFilter.includes(s.id))
+          .map((s: any) => s.name.toLowerCase()) || []
+      );
 
       const equipamentosPermitidos = new Set<number>();
-      equipamentos.forEach((eq: any) => {
-        const sectorId = getEquipamentoSectorId(eq);
-        if (sectorId !== null && setoresFilter.includes(sectorId) && criticalIds.includes(eq.Id)) {
-          equipamentosPermitidos.add(eq.Id);
-        }
-      });
+      if (sectorNames.size > 0) {
+        equipamentos.forEach((eq: any) => {
+          const eqSetor = (eq.Setor || eq.setor || eq.SETOR || '').trim().toLowerCase();
+          if (eqSetor && sectorNames.has(eqSetor) && eq.Id && criticalIds.includes(eq.Id)) {
+            equipamentosPermitidos.add(eq.Id);
+          }
+        });
+      }
 
       // Filtrar dados agregados baseados em equipamentos dos setores permitidos
       if (Array.isArray(aggregated)) {

@@ -53,6 +53,7 @@ export default function ConfigPage() {
     },
   });
 
+
   // Mutation para salvar classificação
   const saveMutation = useMutation({
     mutationFn: async ({ key, value }: { key: string; value: string }) => {
@@ -92,6 +93,7 @@ export default function ConfigPage() {
       queryClient.invalidateQueries({ queryKey: ['config'] });
     },
   });
+
 
   const handleEdit = (type: MaintenanceType) => {
     setEditingKey(type.key);
@@ -527,6 +529,7 @@ export default function ConfigPage() {
           </div>
         )}
       </div>
+
 
       {/* Informações */}
       <div

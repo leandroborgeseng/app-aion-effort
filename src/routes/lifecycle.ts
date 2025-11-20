@@ -87,34 +87,25 @@ lifecycle.get('/cronograma', async (req, res) => {
       listaEmpresaId: empresasId,
     });
     
-    // Função auxiliar para obter SetorId do item
-    const getItemSectorId = (item: any): number | null => {
-      if (item.SetorId !== undefined) return item.SetorId;
-      if (item.Setor) {
-        const sectorNameToIdMap: Record<string, number> = {
-          'UTI 1': 1, 'UTI 2': 2, 'UTI 3': 3, 'Emergência': 4,
-          'Centro Cirúrgico': 5, 'Radiologia': 6, 'Cardiologia': 7,
-          'Neurologia': 8, 'Ortopedia': 9, 'Pediatria': 10,
-          'Maternidade': 11, 'Ambulatório': 12,
-        };
-        if (sectorNameToIdMap[item.Setor]) return sectorNameToIdMap[item.Setor];
-        let hash = 0;
-        for (let i = 0; i < item.Setor.length; i++) {
-          hash = ((hash << 5) - hash) + item.Setor.charCodeAt(i);
-          hash = hash & hash;
-        }
-        return Math.abs(hash % 999) + 1;
-      }
-      return null;
-    };
-
-    // Filtrar por setores se fornecido
+    // Filtrar por setores se fornecido (usando nomes de setores diretamente da API)
     if (setoresFilter && setoresFilter.length > 0 && Array.isArray(data)) {
-      data = data.filter((item: any) => {
-        const sectorId = getItemSectorId(item);
-        return sectorId !== null && setoresFilter.includes(sectorId);
-      });
-      console.log('[cronograma] Filtro aplicado - setores:', setoresFilter, '- Resultado:', data.length);
+      // Buscar nomes dos setores do sistema para fazer o filtro
+      const { dataSource } = await import('../adapters/dataSource');
+      const sectorsRes = await fetch(`${req.protocol}://${req.get('host')}/api/ecm/investments/sectors/list`);
+      const sectorsData = sectorsRes.ok ? await sectorsRes.json() : { sectors: [] };
+      const sectorNames = new Set(
+        sectorsData.sectors
+          ?.filter((s: any) => setoresFilter.includes(s.id))
+          .map((s: any) => s.name.toLowerCase()) || []
+      );
+
+      if (sectorNames.size > 0) {
+        data = data.filter((item: any) => {
+          const itemSetor = (item.Setor || item.setor || item.SETOR || '').trim().toLowerCase();
+          return itemSetor && sectorNames.has(itemSetor);
+        });
+        console.log('[cronograma] Filtro aplicado - setores:', Array.from(sectorNames), '- Resultado:', data.length);
+      }
     }
     
     // Salvar no cache (apenas se não for mock)

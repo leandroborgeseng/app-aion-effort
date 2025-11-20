@@ -621,109 +621,93 @@ investments.get('/sectors/list', async (req, res) => {
       }
     }
 
-    const prismaClient = await getPrisma();
+    // Buscar setores diretamente da API do Effort
+    const { dataSource } = await import('../adapters/dataSource');
     
-    if (USE_MOCK || !prismaClient) {
-      // Fallback para setores mapeados se não tiver Prisma
-      const basicSectors: Record<number, string> = {
-        1: 'UTI 1',
-        2: 'UTI 2',
-        3: 'UTI 3',
-        4: 'Emergência',
-        5: 'Centro Cirúrgico',
-        6: 'Radiologia',
-        7: 'Cardiologia',
-        8: 'Neurologia',
-        9: 'Ortopedia',
-        10: 'Pediatria',
-        11: 'Maternidade',
-        12: 'Ambulatório',
-      };
-
-      const sectors = Object.entries(basicSectors)
-        .map(([idStr, name]) => ({ id: parseInt(idStr), name }))
-        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-
-      return res.json({
-        success: true,
-        total: sectors.length,
-        sectors,
-        source: 'mapped',
+    let equipamentosData: any = null;
+    let osData: any = null;
+    
+    try {
+      equipamentosData = await dataSource.equipamentos({
+        apenasAtivos: false,
+        incluirComponentes: true,
+        incluirCustoSubstituicao: false,
       });
+    } catch (err: any) {
+      console.error('[investments:sectors/list] Erro ao buscar equipamentos:', err?.message);
+      equipamentosData = [];
+    }
+    
+    try {
+      osData = await dataSource.osResumida({
+        tipoManutencao: 'Todos',
+        periodo: 'AnoCorrente',
+        pagina: 0,
+        qtdPorPagina: 10000,
+      });
+    } catch (err: any) {
+      console.error('[investments:sectors/list] Erro ao buscar OS:', err?.message);
+      osData = [];
     }
 
-    // Buscar setores únicos da tabela UserSector (setores configurados para usuários)
-    const userSectors = await prismaClient.userSector.findMany({
-      select: {
-        sectorId: true,
-        sectorName: true,
-      },
-      distinct: ['sectorId'],
-      orderBy: [
-        { sectorId: 'asc' },
-        { sectorName: 'asc' },
-      ],
-    });
-
-    console.log(`[investments:sectors/list] Encontrados ${userSectors.length} setores únicos na tabela UserSector`);
-
-    // Criar mapa de setores únicos
-    const setoresUnicos = new Map<number, string>();
+    // Processar equipamentos
+    const equipamentosArray = Array.isArray(equipamentosData) 
+      ? equipamentosData 
+      : (equipamentosData as any)?.Itens || (equipamentosData as any)?.data || (equipamentosData as any)?.items || [];
     
-    userSectors.forEach((us: any) => {
-      const sectorId = us.sectorId;
-      const sectorName = us.sectorName || `Setor ${sectorId}`;
+    // Processar OS
+    const osArray = Array.isArray(osData)
+      ? osData
+      : (osData as any)?.Itens || (osData as any)?.data || (osData as any)?.items || [];
+
+    // Extrair setores únicos de equipamentos e OS
+    const setoresUnicos = new Map<string, { name: string; id?: number }>();
+    
+    equipamentosArray.forEach((eq: any) => {
+      const setorNome = eq.Setor?.trim() || eq.setor?.trim() || eq.SETOR?.trim() || '';
+      const setorId = eq.SetorId || eq.setorId || eq.SETOR_ID || eq.SetorCodigo || eq.setorCodigo;
       
-      // Se já existe um setor com esse ID, manter o nome mais descritivo (que tenha sectorName)
-      if (!setoresUnicos.has(sectorId) || us.sectorName) {
-        setoresUnicos.set(sectorId, sectorName);
+      if (setorNome && setorNome !== '') {
+        const key = setorNome.toLowerCase();
+        if (!setoresUnicos.has(key)) {
+          setoresUnicos.set(key, {
+            name: setorNome,
+            id: setorId ? Number(setorId) : undefined,
+          });
+        }
       }
     });
 
-    // Se não encontrou setores na tabela UserSector, usar setores mapeados como fallback
-    if (setoresUnicos.size === 0) {
-      console.warn('[investments:sectors/list] ⚠️ NENHUM setor encontrado na tabela UserSector! Usando mapeamento fixo como fallback');
+    osArray.forEach((os: any) => {
+      const setorNome = os.Setor?.trim() || os.setor?.trim() || os.SETOR?.trim() || '';
+      const setorId = os.SetorId || os.setorId || os.SETOR_ID || os.SetorCodigo || os.setorCodigo;
       
-      const basicSectors: Record<number, string> = {
-        1: 'UTI 1',
-        2: 'UTI 2',
-        3: 'UTI 3',
-        4: 'Emergência',
-        5: 'Centro Cirúrgico',
-        6: 'Radiologia',
-        7: 'Cardiologia',
-        8: 'Neurologia',
-        9: 'Ortopedia',
-        10: 'Pediatria',
-        11: 'Maternidade',
-        12: 'Ambulatório',
-      };
-
-      Object.entries(basicSectors).forEach(([idStr, name]) => {
-        setoresUnicos.set(parseInt(idStr), name);
-      });
-    } else {
-      console.log(`[investments:sectors/list] ✅ Encontrados ${setoresUnicos.size} setores configurados no sistema`);
-    }
-
-    // Converter para array ordenado
-    const sectors = Array.from(setoresUnicos.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => {
-        // Ordenar primeiro por ID, depois por nome
-        if (a.id !== b.id) {
-          return a.id - b.id;
+      if (setorNome && setorNome !== '') {
+        const key = setorNome.toLowerCase();
+        if (!setoresUnicos.has(key)) {
+          setoresUnicos.set(key, {
+            name: setorNome,
+            id: setorId ? Number(setorId) : undefined,
+          });
         }
-        return a.name.localeCompare(b.name, 'pt-BR');
-      });
+      }
+    });
 
-    console.log(`[investments:sectors/list] Retornando ${sectors.length} setores configurados`);
+    // Converter para array, gerar IDs sequenciais se não tiverem, e ordenar
+    const sectors = Array.from(setoresUnicos.values())
+      .map((setor, index) => ({
+        id: setor.id || (index + 1),
+        name: setor.name,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+    console.log(`[investments:sectors/list] Retornando ${sectors.length} setores da API do Effort`);
 
     const response = {
       success: true,
       total: sectors.length,
       sectors,
-      source: 'user_sectors',
+      source: 'effort-api',
     };
 
     // Salvar no cache
