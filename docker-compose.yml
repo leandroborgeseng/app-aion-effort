@@ -54,8 +54,9 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     container_name: aion-effort-frontend
-    ports:
-      - "3000:80"
+    # Removendo exposição de porta - Caddy vai fazer proxy
+    expose:
+      - "80"
     restart: unless-stopped
     depends_on:
       backend:
@@ -69,6 +70,38 @@ services:
     networks:
       - aion-network
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: aion-effort-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3 (QUIC)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./logs/caddy:/var/log/caddy
+    environment:
+      - CADDY_ADMIN=0.0.0.0:2019  # Admin API (opcional, pode remover em produção)
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - aion-network
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 networks:
   aion-network:
     driver: bridge
+
+volumes:
+  caddy_data:
+    # Dados persistentes do Caddy (certificados SSL)
+  caddy_config:
+    # Configuração persistente do Caddy

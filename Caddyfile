@@ -1,0 +1,67 @@
+# Configuração do Caddy para proxy reverso
+# Substitua seu-dominio.com pelo seu domínio real
+
+{
+    # Configuração global do Caddy
+    email seu-email@exemplo.com  # Email para certificados SSL (Let's Encrypt)
+    # Ou use staging para testes sem limite de rate:
+    # ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# HTTP - Redirecionar para HTTPS
+http:// {
+    redir https://{host}{uri} permanent
+}
+
+# HTTPS - Proxy reverso principal
+seu-dominio.com {
+    # Proxy reverso para o frontend (aplicação React)
+    handle / {
+        reverse_proxy frontend:80 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Proxy reverso para API backend
+    handle /api/* {
+        reverse_proxy backend:4000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            
+            # Timeouts aumentados para requisições longas
+            transport http {
+                dial_timeout 30s
+                response_header_timeout 120s
+            }
+        }
+    }
+
+    # Headers de segurança
+    header {
+        # Habilitar HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Prevenir clickjacking
+        X-Frame-Options "SAMEORIGIN"
+        # Prevenir MIME sniffing
+        X-Content-Type-Options "nosniff"
+        # XSS Protection
+        X-XSS-Protection "1; mode=block"
+        # Referrer Policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Logs
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+
+    # Compressão
+    encode gzip zstd
+}
+
