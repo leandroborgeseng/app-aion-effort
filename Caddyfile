@@ -26,9 +26,20 @@ av.aion.eng.br {
         }
     }
 
-    # Proxy reverso para o frontend (aplicação React)
-    handle / {
-        reverse_proxy frontend:80
+    # Proxy para uploads
+    handle /uploads/* {
+        reverse_proxy backend:4000
+    }
+
+    # Proxy reverso para o frontend (aplicação React) - deve servir TODOS os arquivos estáticos
+    handle {
+        reverse_proxy frontend:80 {
+            # Headers importantes para o frontend funcionar corretamente
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     # Headers de segurança
