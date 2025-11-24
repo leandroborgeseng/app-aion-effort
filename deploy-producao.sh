@@ -45,16 +45,24 @@ else
 fi
 echo ""
 
-echo "4. Rebuildando containers (se necessário)..."
-# Verificar se há mudanças nos Dockerfiles ou dependências
+echo "4. Verificando mudanças no frontend..."
+HAS_FRONTEND_CHANGES=$(git diff HEAD@{1} HEAD --name-only | grep -E "src/web|src/utils" | wc -l)
 HAS_DOCKERFILE_CHANGES=$(git diff HEAD@{1} HEAD --name-only | grep -E "(Dockerfile|package.json|pnpm-lock.yaml)" | wc -l)
 
-if [ "$HAS_DOCKERFILE_CHANGES" -gt 0 ]; then
-    echo "   ⚠️  Mudanças em Dockerfiles ou dependências detectadas"
+if [ "$HAS_FRONTEND_CHANGES" -gt 0 ] || [ "$HAS_DOCKERFILE_CHANGES" -gt 0 ]; then
+    if [ "$HAS_FRONTEND_CHANGES" -gt 0 ]; then
+        echo "   ⚠️  Mudanças no código do frontend detectadas"
+        echo "   O frontend precisa ser rebuildado"
+    fi
+    
+    if [ "$HAS_DOCKERFILE_CHANGES" -gt 0 ]; then
+        echo "   ⚠️  Mudanças em Dockerfiles ou dependências detectadas"
+    fi
+    
     echo "   Rebuildando backend..."
     docker-compose build backend
     
-    echo "   Rebuildando frontend..."
+    echo "   Rebuildando frontend (isso pode demorar alguns minutos)..."
     docker-compose build frontend
     
     if [ $? -ne 0 ]; then
@@ -63,7 +71,7 @@ if [ "$HAS_DOCKERFILE_CHANGES" -gt 0 ]; then
     fi
     echo "   ✅ Containers rebuildados"
 else
-    echo "   ✅ Nenhuma mudança em Dockerfiles ou dependências"
+    echo "   ✅ Nenhuma mudança que exija rebuild"
 fi
 echo ""
 
