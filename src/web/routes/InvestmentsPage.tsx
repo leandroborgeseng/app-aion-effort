@@ -14,6 +14,8 @@ import {
   FiSave,
   FiArrowUp,
   FiArrowDown,
+  FiShoppingCart,
+  FiLink,
 } from 'react-icons/fi';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { theme } from '../styles/theme';
@@ -65,6 +67,11 @@ export default function InvestmentsPage() {
     isOpen: false,
     id: null,
   });
+  const [showLinkPurchaseRequest, setShowLinkPurchaseRequest] = useState<{ isOpen: boolean; investment: Investment | null }>({
+    isOpen: false,
+    investment: null,
+  });
+  const [previousStatus, setPreviousStatus] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -156,10 +163,29 @@ export default function InvestmentsPage() {
       if (!res.ok) throw new Error('Erro ao atualizar investimento');
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (updatedInvestment, variables) => {
       queryClient.invalidateQueries({ queryKey: ['investments'] });
       setEditingId(null);
       setShowForm(false);
+      
+      // Se o status mudou para "Aprovado" e não estava aprovado antes, mostrar modal
+      if (
+        updatedInvestment.status === 'Aprovado' &&
+        previousStatus !== 'Aprovado' &&
+        variables.data.status === 'Aprovado'
+      ) {
+        // Verificar se já está vinculado a uma purchase request
+        queryClient.invalidateQueries({ queryKey: ['purchase-requests'] });
+        
+        // Aguardar um pouco para garantir que os dados estão atualizados
+        setTimeout(() => {
+          setShowLinkPurchaseRequest({
+            isOpen: true,
+            investment: updatedInvestment,
+          });
+        }, 500);
+      }
+      setPreviousStatus(null);
     },
   });
 
@@ -823,6 +849,9 @@ export default function InvestmentsPage() {
           investment={editingId ? investments?.find((inv) => inv.id === editingId) : undefined}
           onSave={(data) => {
             if (editingId) {
+              const investment = investments?.find((inv) => inv.id === editingId);
+              // Guardar status anterior antes de atualizar
+              setPreviousStatus(investment?.status || null);
               updateMutation.mutate({ id: editingId, data });
             } else {
               createMutation.mutate(data);
@@ -851,6 +880,9 @@ export default function InvestmentsPage() {
           statuses={statuses}
           filters={filters}
           onUpdate={(id, data) => {
+            const investment = investments?.find((inv) => inv.id === id);
+            // Guardar status anterior antes de atualizar
+            setPreviousStatus(investment?.status || null);
             updateMutation.mutate({ id, data });
           }}
           onDelete={(id) => {
@@ -874,6 +906,20 @@ export default function InvestmentsPage() {
         >
           Nenhum investimento encontrado.
         </div>
+      )}
+
+      {/* Modal de Vínculo com Solicitação de Compra */}
+      {showLinkPurchaseRequest.isOpen && showLinkPurchaseRequest.investment && (
+        <LinkPurchaseRequestModal
+          investment={showLinkPurchaseRequest.investment}
+          onClose={() => setShowLinkPurchaseRequest({ isOpen: false, investment: null })}
+          onLinked={() => {
+            queryClient.invalidateQueries({ queryKey: ['investments'] });
+            queryClient.invalidateQueries({ queryKey: ['purchase-requests'] });
+            setShowLinkPurchaseRequest({ isOpen: false, investment: null });
+            toast.success('Investimento vinculado à solicitação de compra com sucesso!');
+          }}
+        />
       )}
     </div>
   );
@@ -2028,6 +2074,304 @@ function InvestmentForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// Modal para vincular investimento a uma solicitação de compra
+function LinkPurchaseRequestModal({
+  investment,
+  onClose,
+  onLinked,
+}: {
+  investment: Investment;
+  onClose: () => void;
+  onLinked: () => void;
+}) {
+  const [mode, setMode] = useState<'select' | 'create'>('select');
+  const [selectedPurchaseRequestId, setSelectedPurchaseRequestId] = useState<string>('');
+  const [isLinking, setIsLinking] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Buscar solicitações de compra disponíveis
+  const { data: purchaseRequests, isLoading: loadingPR } = useQuery<any[]>({
+    queryKey: ['purchase-requests'],
+    queryFn: async () => {
+      const res = await fetch('/api/ecm/purchase-requests');
+      if (!res.ok) throw new Error('Erro ao buscar solicitações de compra');
+      return res.json();
+    },
+  });
+
+  // Dados para criar nova solicitação
+  const [newPRData, setNewPRData] = useState({
+    description: investment.titulo || '',
+    sectorId: investment.sectorId || '',
+    sectorName: investment.setor || '',
+    dataSolicitacao: new Date().toISOString().split('T')[0],
+    observacoes: `Vinculado ao investimento: ${investment.titulo}`,
+  });
+
+  const handleLink = async () => {
+    setIsLinking(true);
+    try {
+      if (mode === 'select' && selectedPurchaseRequestId) {
+        // Vincular a solicitação existente
+        const res = await fetch(`/api/ecm/purchase-requests/${selectedPurchaseRequestId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            investmentIds: [investment.id],
+          }),
+        });
+        if (!res.ok) throw new Error('Erro ao vincular investimento');
+      } else if (mode === 'create') {
+        // Criar nova solicitação e vincular
+        const res = await fetch('/api/ecm/purchase-requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...newPRData,
+            sectorId: Number(newPRData.sectorId),
+            investmentIds: [investment.id],
+            status: 'Pendente',
+          }),
+        });
+        if (!res.ok) throw new Error('Erro ao criar solicitação de compra');
+      } else {
+        throw new Error('Selecione uma solicitação ou crie uma nova');
+      }
+      onLinked();
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao vincular investimento');
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: theme.spacing.md,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          backgroundColor: theme.colors.white,
+          borderRadius: theme.borderRadius.md,
+          padding: theme.spacing.xl,
+          maxWidth: '600px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflow: 'auto',
+          boxShadow: theme.shadows.lg,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.lg }}>
+          <h2 style={{ margin: 0, color: theme.colors.dark, display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+            <FiShoppingCart size={24} color={theme.colors.primary} />
+            Vincular a Solicitação de Compra
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              padding: theme.spacing.xs,
+              border: 'none',
+              backgroundColor: 'transparent',
+              cursor: 'pointer',
+              color: theme.colors.gray[600],
+              fontSize: '24px',
+              lineHeight: 1,
+            }}
+          >
+            <FiX />
+          </button>
+        </div>
+
+        <div style={{ marginBottom: theme.spacing.md, padding: theme.spacing.md, backgroundColor: theme.colors.gray[50], borderRadius: theme.borderRadius.sm }}>
+          <p style={{ margin: 0, fontSize: '14px', color: theme.colors.dark }}>
+            <strong>Investimento:</strong> {investment.titulo}
+          </p>
+          {investment.valorEstimado && (
+            <p style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '14px', color: theme.colors.gray[600] }}>
+              <strong>Valor estimado:</strong> R$ {investment.valorEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          )}
+        </div>
+
+        <div style={{ marginBottom: theme.spacing.lg }}>
+          <div style={{ display: 'flex', gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
+            <button
+              onClick={() => setMode('select')}
+              style={{
+                flex: 1,
+                padding: theme.spacing.sm,
+                border: `2px solid ${mode === 'select' ? theme.colors.primary : theme.colors.gray[300]}`,
+                borderRadius: theme.borderRadius.sm,
+                backgroundColor: mode === 'select' ? `${theme.colors.primary}10` : theme.colors.white,
+                color: mode === 'select' ? theme.colors.primary : theme.colors.dark,
+                cursor: 'pointer',
+                fontWeight: mode === 'select' ? 600 : 400,
+              }}
+            >
+              <FiLink size={16} style={{ marginRight: theme.spacing.xs, verticalAlign: 'middle' }} />
+              Vincular a Existente
+            </button>
+            <button
+              onClick={() => setMode('create')}
+              style={{
+                flex: 1,
+                padding: theme.spacing.sm,
+                border: `2px solid ${mode === 'create' ? theme.colors.primary : theme.colors.gray[300]}`,
+                borderRadius: theme.borderRadius.sm,
+                backgroundColor: mode === 'create' ? `${theme.colors.primary}10` : theme.colors.white,
+                color: mode === 'create' ? theme.colors.primary : theme.colors.dark,
+                cursor: 'pointer',
+                fontWeight: mode === 'create' ? 600 : 400,
+              }}
+            >
+              <FiPlus size={16} style={{ marginRight: theme.spacing.xs, verticalAlign: 'middle' }} />
+              Criar Nova
+            </button>
+          </div>
+
+          {mode === 'select' ? (
+            <div>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                Selecione uma Solicitação de Compra
+              </label>
+              {loadingPR ? (
+                <p style={{ color: theme.colors.gray[500] }}>Carregando...</p>
+              ) : purchaseRequests && purchaseRequests.length > 0 ? (
+                <select
+                  value={selectedPurchaseRequestId}
+                  onChange={(e) => setSelectedPurchaseRequestId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    borderRadius: theme.borderRadius.sm,
+                    fontSize: '14px',
+                  }}
+                >
+                  <option value="">Selecione...</option>
+                  {purchaseRequests.map((pr: any) => (
+                    <option key={pr.id} value={pr.id}>
+                      {pr.numeroSolicitacao || 'Sem número'} - {pr.description} ({pr.status})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p style={{ color: theme.colors.gray[500], fontSize: '14px' }}>
+                  Nenhuma solicitação de compra encontrada. Crie uma nova.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <div style={{ marginBottom: theme.spacing.md }}>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  Descrição *
+                </label>
+                <input
+                  type="text"
+                  value={newPRData.description}
+                  onChange={(e) => setNewPRData({ ...newPRData, description: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    borderRadius: theme.borderRadius.sm,
+                    fontSize: '14px',
+                  }}
+                  placeholder="Descrição da solicitação"
+                />
+              </div>
+              <div style={{ marginBottom: theme.spacing.md }}>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  Setor *
+                </label>
+                <input
+                  type="text"
+                  value={newPRData.sectorName}
+                  readOnly
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    borderRadius: theme.borderRadius.sm,
+                    fontSize: '14px',
+                    backgroundColor: theme.colors.gray[50],
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: theme.spacing.md }}>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  Data da Solicitação *
+                </label>
+                <input
+                  type="date"
+                  value={newPRData.dataSolicitacao}
+                  onChange={(e) => setNewPRData({ ...newPRData, dataSolicitacao: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    borderRadius: theme.borderRadius.sm,
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: theme.spacing.sm, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            disabled={isLinking}
+            style={{
+              padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+              backgroundColor: theme.colors.gray[200],
+              border: 'none',
+              borderRadius: theme.borderRadius.md,
+              cursor: isLinking ? 'not-allowed' : 'pointer',
+              color: theme.colors.dark,
+              opacity: isLinking ? 0.6 : 1,
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleLink}
+            disabled={isLinking || (mode === 'select' && !selectedPurchaseRequestId) || (mode === 'create' && !newPRData.description)}
+            style={{
+              padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+              backgroundColor: theme.colors.primary,
+              border: 'none',
+              borderRadius: theme.borderRadius.md,
+              cursor: isLinking || (mode === 'select' && !selectedPurchaseRequestId) || (mode === 'create' && !newPRData.description) ? 'not-allowed' : 'pointer',
+              color: theme.colors.white,
+              fontWeight: 600,
+              opacity: isLinking || (mode === 'select' && !selectedPurchaseRequestId) || (mode === 'create' && !newPRData.description) ? 0.6 : 1,
+            }}
+          >
+            {isLinking ? 'Vinculando...' : 'Vincular'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

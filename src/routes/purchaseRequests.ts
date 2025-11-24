@@ -550,17 +550,31 @@ purchaseRequests.patch('/:id', authenticateToken, async (req: AuthRequest, res) 
 
     // Atualizar vínculos de investimentos
     if (investmentIds !== undefined) {
-      // Primeiro, deletar todas as relações existentes
-      await prismaClient.purchaseRequestInvestment.deleteMany({
-        where: { purchaseRequestId: id },
-      });
-      // Depois, criar as novas relações
       if (Array.isArray(investmentIds) && investmentIds.length > 0) {
-        updateData.investments = {
-          create: investmentIds.map((invId: string) => ({
-            investmentId: invId,
-          })),
-        };
+        // Buscar vínculos existentes
+        const existingLinks = await prismaClient.purchaseRequestInvestment.findMany({
+          where: { purchaseRequestId: id },
+          select: { investmentId: true },
+        });
+        
+        const existingInvestmentIds = new Set(existingLinks.map(link => link.investmentId));
+        
+        // Filtrar apenas investimentos novos (que ainda não estão vinculados)
+        const newInvestmentIds = investmentIds.filter((invId: string) => !existingInvestmentIds.has(invId));
+        
+        if (newInvestmentIds.length > 0) {
+          // Criar apenas os novos vínculos
+          await prismaClient.purchaseRequestInvestment.createMany({
+            data: newInvestmentIds.map((invId: string) => ({
+              purchaseRequestId: id,
+              investmentId: invId,
+            })),
+            skipDuplicates: true, // Evitar erro se já existir
+          });
+        }
+      } else {
+        // Se investmentIds é um array vazio, não fazer nada (não remover vínculos existentes)
+        // Para remover, seria necessário um endpoint específico ou passar um flag
       }
     }
 
