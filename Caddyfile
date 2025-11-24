@@ -14,7 +14,7 @@ http:// {
 }
 
 # HTTPS - Proxy reverso principal
-seu-dominio.com {
+av.aion.eng.br {
     # Proxy reverso para o frontend (aplicação React)
     handle / {
         reverse_proxy frontend:80 {
