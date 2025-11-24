@@ -18,7 +18,7 @@ echo ""
 echo "3. Fazendo rebuild completo do frontend (isso pode demorar 3-5 minutos)..."
 echo "   Por favor, aguarde..."
 echo ""
-docker-compose build --no-cache --progress=plain frontend
+docker-compose build --no-cache frontend
 
 if [ $? -ne 0 ]; then
     echo ""
