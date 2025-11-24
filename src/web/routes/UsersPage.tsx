@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FiUsers, FiPlus, FiEdit2, FiTrash2, FiSave, FiX, FiEye, FiEyeOff, FiShield, FiMapPin } from 'react-icons/fi';
+import { FiUsers, FiPlus, FiEdit2, FiTrash2, FiSave, FiX, FiEye, FiEyeOff, FiShield, FiMapPin, FiLock } from 'react-icons/fi';
 import { theme } from '../styles/theme';
 import { useUser } from '../contexts/UserContext';
 
@@ -43,6 +43,9 @@ export default function UsersPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<Partial<User & { managedUserIds?: string[] }>>({});
+  const [passwordChangeUserId, setPasswordChangeUserId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const queryClient = useQueryClient();
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
@@ -123,6 +126,31 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries();
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const res = await fetch(`/api/users/${userId}/password`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: password }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Erro ao alterar senha');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setPasswordChangeUserId(null);
+      setNewPassword('');
+      setConfirmPassword('');
+      alert('Senha alterada com sucesso!');
+    },
+    onError: (error: any) => {
+      alert('Erro ao alterar senha: ' + (error?.message || 'Erro desconhecido'));
     },
   });
 
@@ -760,6 +788,22 @@ export default function UsersPage() {
                         <FiShield size={16} />
                       </button>
                     )}
+                    {currentUser?.role === 'admin' && (
+                      <button
+                        onClick={() => setPasswordChangeUserId(user.id)}
+                        title="Alterar senha"
+                        style={{
+                          padding: theme.spacing.xs,
+                          borderRadius: theme.borderRadius.sm,
+                          border: 'none',
+                          backgroundColor: theme.colors.gray[100],
+                          color: theme.colors.info,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <FiLock size={16} />
+                      </button>
+                    )}
                     <button
                       onClick={() => handleEdit(user)}
                       style={{
@@ -797,6 +841,141 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Modal de Alterar Senha */}
+      {passwordChangeUserId && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => {
+            setPasswordChangeUserId(null);
+            setNewPassword('');
+            setConfirmPassword('');
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: theme.colors.white,
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.lg,
+              maxWidth: '400px',
+              width: '90%',
+              boxShadow: theme.shadows.lg,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: `0 0 ${theme.spacing.md} 0`, color: theme.colors.dark }}>
+              Alterar Senha
+            </h3>
+            <p style={{ margin: `0 0 ${theme.spacing.md} 0`, fontSize: '14px', color: theme.colors.gray[600] }}>
+              Usuário: {users?.find(u => u.id === passwordChangeUserId)?.name || 'N/A'}
+            </p>
+            <div style={{ marginBottom: theme.spacing.md }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
+                Nova Senha *
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: theme.spacing.sm,
+                  border: `1px solid ${theme.colors.gray[300]}`,
+                  borderRadius: theme.borderRadius.sm,
+                  fontSize: '14px',
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
+                }}
+                placeholder="Mínimo 6 caracteres"
+              />
+            </div>
+            <div style={{ marginBottom: theme.spacing.md }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
+                Confirmar Senha *
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: theme.spacing.sm,
+                  border: `1px solid ${newPassword !== confirmPassword && confirmPassword ? theme.colors.danger : theme.colors.gray[300]}`,
+                  borderRadius: theme.borderRadius.sm,
+                  fontSize: '14px',
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
+                }}
+                placeholder="Digite a senha novamente"
+              />
+              {newPassword !== confirmPassword && confirmPassword && (
+                <p style={{ margin: `${theme.spacing.xs / 2} 0 0 0`, fontSize: '12px', color: theme.colors.danger }}>
+                  As senhas não coincidem
+                </p>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: theme.spacing.sm, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setPasswordChangeUserId(null);
+                  setNewPassword('');
+                  setConfirmPassword('');
+                }}
+                style={{
+                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                  borderRadius: theme.borderRadius.md,
+                  border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.gray[700],
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (!newPassword || newPassword.length < 6) {
+                    alert('A senha deve ter pelo menos 6 caracteres');
+                    return;
+                  }
+                  if (newPassword !== confirmPassword) {
+                    alert('As senhas não coincidem');
+                    return;
+                  }
+                  if (passwordChangeUserId) {
+                    changePasswordMutation.mutate({ userId: passwordChangeUserId, password: newPassword });
+                  }
+                }}
+                disabled={changePasswordMutation.isPending || !newPassword || newPassword.length < 6 || newPassword !== confirmPassword}
+                style={{
+                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                  borderRadius: theme.borderRadius.md,
+                  border: 'none',
+                  backgroundColor: theme.colors.primary,
+                  color: theme.colors.white,
+                  cursor: changePasswordMutation.isPending || !newPassword || newPassword.length < 6 || newPassword !== confirmPassword ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  opacity: changePasswordMutation.isPending || !newPassword || newPassword.length < 6 || newPassword !== confirmPassword ? 0.6 : 1,
+                }}
+              >
+                {changePasswordMutation.isPending ? 'Alterando...' : 'Alterar Senha'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

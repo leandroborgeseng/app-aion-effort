@@ -684,6 +684,96 @@ users.post('/impersonate', async (req, res) => {
   }
 });
 
+// PATCH /api/users/:id/password - Alterar senha de usuário (apenas admin)
+users.patch('/:id/password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({ error: true, message: 'Senha deve ter pelo menos 6 caracteres' });
+    }
+
+    if (USE_MOCK) {
+      res.json({ ok: true, message: 'Senha alterada com sucesso' });
+    } else {
+      const prismaClient = await getPrisma();
+      if (!prismaClient) {
+        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+      }
+
+      // Verificar se o usuário existe
+      const user = await prismaClient.user.findUnique({
+        where: { id },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: true, message: 'Usuário não encontrado' });
+      }
+
+      // Gerar hash da nova senha
+      const bcrypt = await import('bcrypt');
+      const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
+
+      // Atualizar senha
+      await prismaClient.user.update({
+        where: { id },
+        data: { password: hashedPassword },
+      });
+
+      res.json({ ok: true, message: 'Senha alterada com sucesso' });
+    }
+  } catch (e: any) {
+    console.error('[users:PATCH/:id/password] Erro:', e);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao alterar senha' });
+  }
+});
+
+// PATCH /api/users/:id/password - Alterar senha de usuário (apenas admin)
+users.patch('/:id/password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({ error: true, message: 'Senha deve ter pelo menos 6 caracteres' });
+    }
+
+    if (USE_MOCK) {
+      res.json({ ok: true, message: 'Senha alterada com sucesso' });
+    } else {
+      const prismaClient = await getPrisma();
+      if (!prismaClient) {
+        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+      }
+
+      // Verificar se o usuário existe
+      const user = await prismaClient.user.findUnique({
+        where: { id },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: true, message: 'Usuário não encontrado' });
+      }
+
+      // Gerar hash da nova senha
+      const bcrypt = await import('bcrypt');
+      const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
+
+      // Atualizar senha
+      await prismaClient.user.update({
+        where: { id },
+        data: { password: hashedPassword },
+      });
+
+      res.json({ ok: true, message: 'Senha alterada com sucesso' });
+    }
+  } catch (e: any) {
+    console.error('[users:PATCH/:id/password] Erro:', e);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao alterar senha' });
+  }
+});
+
 // POST /api/users/impersonate/stop - Parar personificação
 users.post('/impersonate/stop', async (req, res) => {
   try {
