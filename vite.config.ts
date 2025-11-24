@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import path from 'path';
 
 export default defineConfig({
   plugins: [
@@ -138,6 +139,24 @@ export default defineConfig({
       output: {
         manualChunks: undefined,
       },
+      // Ignorar módulos do backend durante o build do frontend
+      external: (id) => {
+        // Ignorar imports de serviços do backend (incluindo caminhos relativos)
+        if (id.includes('prismaService') || 
+            id.includes('/services/prismaService') ||
+            id.includes('\\services\\prismaService')) {
+          return true;
+        }
+        return false;
+      },
+    },
+  },
+  resolve: {
+    alias: {
+      // Criar um stub para prismaService que sempre retorna null
+      // Isso evita que o Vite tente resolver o módulo real durante o build
+      '../services/prismaService': path.resolve(__dirname, './src/utils/prismaServiceStub.ts'),
+      '../../services/prismaService': path.resolve(__dirname, './src/utils/prismaServiceStub.ts'),
     },
   },
   server: {

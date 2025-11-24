@@ -104,6 +104,8 @@ export function getSectorNamesFromIds(sectorIds: number[]): string[] {
  * 2. Se não encontrar, busca da API de investimentos (/api/ecm/investments/sectors/list)
  * 3. Fallback para mapeamento fixo
  * 
+ * NOTA: Esta função só deve ser usada no backend, pois depende de Prisma
+ * 
  * @param sectorIds - IDs dos setores para buscar nomes
  * @param req - Request object (opcional) para buscar da API de investimentos
  */
@@ -116,8 +118,17 @@ export async function getSectorNamesFromUserSector(
   const nomes: string[] = [];
   
   try {
-    const { getPrisma } = await import('../services/prismaService');
-    const prismaClient = await getPrisma();
+    // Import dinâmico com try-catch para evitar erro no build do frontend
+    // No frontend, este código nunca será executado, mas o Vite tenta resolver o import
+    let prismaClient = null;
+    try {
+      // @ts-ignore - Ignorar erro de tipo no frontend
+      const prismaService = await import('../services/prismaService');
+      prismaClient = await prismaService.getPrisma();
+    } catch (importError) {
+      // Se falhar o import (ex: no frontend), continuar sem Prisma
+      console.warn('[getSectorNamesFromUserSector] Prisma não disponível (provavelmente frontend):', importError);
+    }
     
     if (!prismaClient) {
       throw new Error('Prisma não disponível');
