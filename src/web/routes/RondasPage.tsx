@@ -282,7 +282,7 @@ export default function RondasPage() {
           }}
         >
           <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600] }}>Total de Setores</p>
-          <h3 style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '28px', fontWeight: 700 }}>
+          <h3 style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '28px', fontWeight: 700, color: theme.colors.dark }}>
             {data?.length || 0}
           </h3>
         </div>
@@ -296,7 +296,7 @@ export default function RondasPage() {
           }}
         >
           <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600] }}>OS Abertas</p>
-          <h3 style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '28px', fontWeight: 700 }}>
+          <h3 style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '28px', fontWeight: 700, color: theme.colors.dark }}>
             {totalOSAbertas}
           </h3>
         </div>
@@ -310,7 +310,7 @@ export default function RondasPage() {
           }}
         >
           <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600] }}>OS Fechadas</p>
-          <h3 style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '28px', fontWeight: 700 }}>
+          <h3 style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '28px', fontWeight: 700, color: theme.colors.dark }}>
             {totalOSFechadas}
           </h3>
         </div>
@@ -818,13 +818,13 @@ function CreateRoundForm({
         marginBottom: theme.spacing.lg,
       }}
     >
-      <h3 style={{ marginTop: 0, marginBottom: theme.spacing.md }}>
+      <h3 style={{ marginTop: 0, marginBottom: theme.spacing.md, color: theme.colors.dark }}>
         {round ? 'Editar Ronda' : 'Nova Ronda'}
       </h3>
       <form onSubmit={handleSubmit} style={{ display: 'grid', gap: theme.spacing.md }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: theme.spacing.md }}>
           <div>
-            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
               Setor *
             </label>
             <select
@@ -838,12 +838,13 @@ function CreateRoundForm({
                 border: `1px solid ${theme.colors.gray[300]}`,
                 fontSize: '14px',
                 backgroundColor: sectorsLoading ? theme.colors.gray[100] : theme.colors.white,
+                color: theme.colors.dark,
                 cursor: sectorsLoading ? 'not-allowed' : 'pointer',
               }}
             >
-              <option value="">Selecione um setor</option>
+              <option value="" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Selecione um setor</option>
               {sectorsData?.map((sector) => (
-                <option key={sector.id} value={`${sector.id}|${sector.name}`}>
+                <option key={sector.id} value={`${sector.id}|${sector.name}`} style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>
                   {sector.name} (ID: {sector.id})
                 </option>
               ))}
@@ -855,7 +856,7 @@ function CreateRoundForm({
             )}
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
               Data de Início da Semana *
             </label>
             <input
@@ -868,11 +869,13 @@ function CreateRoundForm({
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
                 fontSize: '14px',
+                backgroundColor: theme.colors.white,
+                color: theme.colors.dark,
               }}
             />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
               Responsável *
             </label>
             <input
@@ -887,6 +890,7 @@ function CreateRoundForm({
                 border: `1px solid ${theme.colors.gray[300]}`,
                 fontSize: '14px',
                 backgroundColor: isLoadingResponsible ? theme.colors.gray[100] : theme.colors.white,
+                color: theme.colors.dark,
                 cursor: isLoadingResponsible ? 'not-allowed' : 'text',
               }}
             />
@@ -904,7 +908,7 @@ function CreateRoundForm({
         </div>
 
         <div>
-          <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+          <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
             Resumo da Ronda
           </label>
           <textarea
@@ -917,6 +921,8 @@ function CreateRoundForm({
               border: `1px solid ${theme.colors.gray[300]}`,
               fontSize: '14px',
               fontFamily: 'inherit',
+              backgroundColor: theme.colors.white,
+              color: theme.colors.dark,
             }}
             placeholder="Descreva o resumo da ronda, observações importantes, problemas identificados, etc."
           />
@@ -925,7 +931,7 @@ function CreateRoundForm({
         {/* Seleção de OS */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xs }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500 }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
               Ordens de Serviço Vinculadas ({selectedOS.length} selecionadas)
             </label>
             <div style={{ display: 'flex', gap: theme.spacing.xs }}>
@@ -1005,11 +1011,12 @@ function CreateRoundForm({
               border: `1px solid ${theme.colors.gray[300]}`,
               borderRadius: theme.borderRadius.sm,
               padding: theme.spacing.sm,
+              backgroundColor: theme.colors.white,
             }}
           >
             {Object.entries(osBySector).map(([setor, osList]) => (
               <div key={setor} style={{ marginBottom: theme.spacing.md }}>
-                <h4 style={{ margin: `0 0 ${theme.spacing.xs} 0`, fontSize: '13px', fontWeight: 600, color: theme.colors.gray[700] }}>
+                <h4 style={{ margin: `0 0 ${theme.spacing.xs} 0`, fontSize: '13px', fontWeight: 600, color: theme.colors.dark }}>
                   {setor}
                 </h4>
                 {osList.map((os: any) => (
@@ -1031,7 +1038,7 @@ function CreateRoundForm({
                       onChange={() => toggleOS(os.CodigoSerialOS)}
                       style={{ cursor: 'pointer' }}
                     />
-                    <span style={{ fontSize: '13px', flex: 1 }}>
+                    <span style={{ fontSize: '13px', flex: 1, color: theme.colors.dark }}>
                       {os.OS} - {os.Equipamento} ({os.SituacaoDaOS})
                     </span>
                   </label>
@@ -1051,58 +1058,11 @@ function CreateRoundForm({
           </div>
         </div>
 
-        {/* Setores Disponíveis da API */}
-        {investmentSectors && investmentSectors.sectors && Array.isArray(investmentSectors.sectors) && investmentSectors.sectors.length > 0 && (
-          <div style={{ marginBottom: theme.spacing.md }}>
-            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
-              Setores Disponíveis da API ({investmentSectors.sectors.length} setores)
-            </label>
-            <div
-              style={{
-                maxHeight: '150px',
-                overflow: 'auto',
-                border: `1px solid ${theme.colors.gray[300]}`,
-                borderRadius: theme.borderRadius.sm,
-                padding: theme.spacing.sm,
-                backgroundColor: theme.colors.gray[50],
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: theme.spacing.xs,
-              }}
-            >
-              {investmentSectors.sectors.map((sector: any, idx: number) => (
-                <div
-                  key={idx}
-                  style={{
-                    padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                    backgroundColor: theme.colors.white,
-                    border: `1px solid ${theme.colors.gray[300]}`,
-                    borderRadius: theme.borderRadius.xs,
-                    fontSize: '12px',
-                    color: theme.colors.dark,
-                  }}
-                  title={`ID: ${sector.id || 'N/A'}`}
-                >
-                  <strong>{sector.name || 'Setor sem nome'}</strong>
-                  {sector.id && (
-                    <span style={{ marginLeft: theme.spacing.xs, color: theme.colors.gray[600] }}>
-                      (ID: {sector.id})
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-            <p style={{ marginTop: theme.spacing.xs, fontSize: '12px', color: theme.colors.gray[600], fontStyle: 'italic' }}>
-              Estes setores são retornados pela API e podem ser usados para filtros em outros módulos do sistema.
-            </p>
-          </div>
-        )}
-
         {/* Investimentos do Setor */}
         {formData.sectorId && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xs }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Investimentos do Setor ({selectedInvestments.length} selecionados de {availableInvestments?.length || 0} encontrados)
               </label>
               <button
@@ -1194,7 +1154,7 @@ function CreateRoundForm({
 
         {/* Seleção de Purchase Requests */}
         <div>
-          <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+          <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
             Solicitações de Compra Vinculadas
           </label>
           <div
@@ -1332,7 +1292,7 @@ function CreateInvestmentFromRoundModal({
         </p>
         <form onSubmit={handleSubmit} style={{ display: 'grid', gap: theme.spacing.md }}>
           <div>
-            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
               Título *
             </label>
             <input
@@ -1345,12 +1305,14 @@ function CreateInvestmentFromRoundModal({
                 padding: theme.spacing.sm,
                 border: `1px solid ${theme.colors.gray[300]}`,
                 fontSize: '14px',
+                backgroundColor: theme.colors.white,
+                color: theme.colors.dark,
               }}
             />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: theme.spacing.md }}>
             <div>
-              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Categoria *
               </label>
               <select
@@ -1363,17 +1325,19 @@ function CreateInvestmentFromRoundModal({
                   border: `1px solid ${theme.colors.gray[300]}`,
                   borderRadius: theme.borderRadius.sm,
                   fontSize: '14px',
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               >
                 {categorias.map((c) => (
-                  <option key={c} value={c}>
+                  <option key={c} value={c} style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>
                     {c}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Valor Estimado *
               </label>
               <input
@@ -1388,13 +1352,15 @@ function CreateInvestmentFromRoundModal({
                   border: `1px solid ${theme.colors.gray[300]}`,
                   borderRadius: theme.borderRadius.sm,
                   fontSize: '14px',
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               />
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: theme.spacing.md }}>
             <div>
-              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Prioridade *
               </label>
               <select
@@ -1407,17 +1373,19 @@ function CreateInvestmentFromRoundModal({
                   border: `1px solid ${theme.colors.gray[300]}`,
                   borderRadius: theme.borderRadius.sm,
                   fontSize: '14px',
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               >
                 {prioridades.map((p) => (
-                  <option key={p} value={p}>
+                  <option key={p} value={p} style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>
                     {p}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Status
               </label>
               <select
@@ -1429,10 +1397,12 @@ function CreateInvestmentFromRoundModal({
                   border: `1px solid ${theme.colors.gray[300]}`,
                   borderRadius: theme.borderRadius.sm,
                   fontSize: '14px',
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               >
                 {statuses.map((s) => (
-                  <option key={s} value={s}>
+                  <option key={s} value={s} style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>
                     {s}
                   </option>
                 ))}
@@ -1440,7 +1410,7 @@ function CreateInvestmentFromRoundModal({
             </div>
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+            <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
               Descrição
             </label>
             <textarea
@@ -1454,6 +1424,8 @@ function CreateInvestmentFromRoundModal({
                 borderRadius: theme.borderRadius.sm,
                 fontSize: '14px',
                 fontFamily: 'inherit',
+                backgroundColor: theme.colors.white,
+                color: theme.colors.dark,
               }}
             />
           </div>

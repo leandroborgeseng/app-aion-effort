@@ -1,10 +1,10 @@
 // src/web/routes/ConfigPage.tsx
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FiSettings, FiSave, FiX, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import { FiSettings, FiSave, FiX, FiAlertCircle, FiCheckCircle, FiShield } from 'react-icons/fi';
 import { theme } from '../styles/theme';
 import { usePermissions } from '../hooks/usePermissions';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 
 interface MaintenanceType {
   id: string | null;
@@ -132,23 +132,54 @@ export default function ConfigPage() {
   return (
     <div style={{ padding: theme.spacing.xl, maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ marginBottom: theme.spacing.xl }}>
-        <h1
-          style={{
-            margin: 0,
-            marginBottom: theme.spacing.sm,
-            color: theme.colors.dark,
-            fontSize: '32px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: theme.spacing.sm,
-          }}
-        >
-          <FiSettings size={32} color={theme.colors.primary} />
-          Configurações do Sistema
-        </h1>
-        <p style={{ color: theme.colors.gray[600], margin: 0, fontSize: '16px' }}>
-          Configure as classificações de tipos de manutenção para o dashboard
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: theme.spacing.md }}>
+          <div>
+            <h1
+              style={{
+                margin: 0,
+                marginBottom: theme.spacing.sm,
+                color: theme.colors.dark,
+                fontSize: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: theme.spacing.sm,
+              }}
+            >
+              <FiSettings size={32} color={theme.colors.primary} />
+              Configurações do Sistema
+            </h1>
+            <p style={{ color: theme.colors.gray[600], margin: 0, fontSize: '16px' }}>
+              Configure as classificações de tipos de manutenção e permissões do sistema
+            </p>
+          </div>
+          <Link
+            to="/permissoes"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: theme.spacing.sm,
+              padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+              backgroundColor: theme.colors.primary,
+              color: theme.colors.white,
+              borderRadius: theme.borderRadius.md,
+              textDecoration: 'none',
+              fontWeight: 600,
+              fontSize: '14px',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = theme.colors.primary + 'DD';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = theme.colors.primary;
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            <FiShield size={18} />
+            Configurar Permissões
+          </Link>
+        </div>
       </div>
 
       {/* Card de Classificação de Tipos de Manutenção */}

@@ -3,17 +3,9 @@ import { Router } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const USE_MOCK = process.env.USE_MOCK === 'true';
+import { getPrisma } from '../services/prismaService';
 
-// Lazy load Prisma apenas quando necessário (modo não-mock)
-let prisma: any = null;
-async function getPrisma() {
-  if (!prisma && !USE_MOCK) {
-    const { PrismaClient } = await import('@prisma/client');
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
+const USE_MOCK = process.env.USE_MOCK === 'true';
 
 export const investments = Router();
 
@@ -104,6 +96,7 @@ investments.get('/', async (req, res) => {
       if (sectorRoundId) where.sectorRoundId = sectorRoundId;
       
       // Buscar todos os investimentos primeiro (sem filtro de sectorId no where)
+      console.log('[investments] Buscando investimentos - sectorId:', sectorId, 'isAdmin:', !sectorId);
       let data = await prismaClient.investment.findMany({
         where,
         include: {
@@ -118,27 +111,120 @@ investments.get('/', async (req, res) => {
         orderBy: { createdAt: 'desc' },
       });
       
-      // Aplicar filtro de sectorId se fornecido (usando o mesmo método usado para equipamentos e OS)
+      console.log('[investments] Total de investimentos encontrados (antes do filtro):', data.length);
+      
+      // Aplicar filtro de sectorId se fornecido (usando a mesma lógica do inventário)
+      // Se não há sectorId (admin), retornar todos os investimentos
       if (sectorId) {
         const sectorIdNum = Number(sectorId);
-        const { getSectorIdFromName } = await import('../utils/sectorMapping');
+        
+        // Buscar nomes dos setores usando SectorMapping do banco (mesma lógica do inventário)
+        let sectorNamesToMatch: string[] = [];
+        try {
+          const { getPrisma } = await import('../services/prismaService');
+          const prismaClient = await getPrisma();
+          if (prismaClient) {
+            const sectorMappings = await prismaClient.sectorMapping.findMany({
+              where: {
+                systemSectorId: sectorIdNum,
+                active: true,
+              },
+            });
+            
+            // Criar lista com todos os nomes de setores (effortSectorName prioritário)
+            sectorMappings.forEach((mapping) => {
+              if (mapping.effortSectorName) {
+                sectorNamesToMatch.push(mapping.effortSectorName);
+              }
+              if (mapping.systemSectorName && mapping.systemSectorName !== mapping.effortSectorName) {
+                sectorNamesToMatch.push(mapping.systemSectorName);
+              }
+            });
+            
+            console.log('[investments] Setores mapeados encontrados no banco para sectorId', sectorIdNum, ':', sectorNamesToMatch);
+          }
+          
+          // Se não encontrou mapeamento no banco, buscar nomes dos setores da API de investimentos
+          if (sectorNamesToMatch.length === 0) {
+            try {
+              const sectorsRes = await fetch(`${req.protocol}://${req.get('host')}/api/ecm/investments/sectors/list`);
+              if (sectorsRes.ok) {
+                const sectorsData = await sectorsRes.json();
+                const sectorFromApi = sectorsData.sectors?.find((s: any) => s.id === sectorIdNum);
+                if (sectorFromApi?.name) {
+                  sectorNamesToMatch.push(sectorFromApi.name);
+                  console.log('[investments] Setor encontrado na API de investimentos:', sectorFromApi.name);
+                }
+              }
+            } catch (apiError: any) {
+              console.warn('[investments] Erro ao buscar setor da API:', apiError?.message);
+            }
+          }
+        } catch (error: any) {
+          console.warn('[investments] Erro ao buscar mapeamento de setores:', error?.message);
+        }
+        
+        // Função auxiliar para normalizar string (remove acentos, espaços extras)
+        const normalizarString = (str: string): string => {
+          if (!str) return '';
+          return str
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+            .replace(/\s+/g, ' ') // Normaliza espaços
+            .trim();
+        };
         
         data = data.filter((inv: any) => {
-          // Verificar pelo sectorId direto
-          if (inv.sectorId === sectorIdNum) return true;
-          // Se não corresponde, tentar pelo nome do setor usando getSectorIdFromName
-          if (inv.setor) {
-            const invSectorId = getSectorIdFromName(inv.setor);
-            return invSectorId === sectorIdNum;
+          // Prioridade 1: Verificar pelo sectorId direto
+          if (inv.sectorId === sectorIdNum) {
+            return true;
           }
+          
+          // Prioridade 2: Se temos mapeamento do banco, usar comparação flexível por nome do setor
+          if (sectorNamesToMatch.length > 0 && inv.setor) {
+            const invSetorNormalizado = normalizarString(inv.setor);
+            for (const sectorName of sectorNamesToMatch) {
+              const sectorNameNormalizado = normalizarString(sectorName);
+              
+              // Comparação exata
+              if (invSetorNormalizado === sectorNameNormalizado) {
+                return true;
+              }
+              
+              // Verificar se o nome do setor está contido no setor do investimento
+              if (invSetorNormalizado.includes(sectorNameNormalizado) || sectorNameNormalizado.includes(invSetorNormalizado)) {
+                return true;
+              }
+              
+              // Verificar palavras principais (para nomes compostos)
+              const palavrasSetor = sectorNameNormalizado.split(/\s+/).filter(w => w.length >= 3);
+              if (palavrasSetor.length >= 2) {
+                const palavrasCoincidentes = palavrasSetor.filter(palavra => invSetorNormalizado.includes(palavra));
+                if (palavrasCoincidentes.length >= 2) {
+                  return true;
+                }
+              }
+            }
+          }
+          
+          // Fallback: não incluir se não encontrou correspondência
           return false;
         });
+        
+        console.log('[investments] Total de investimentos encontrados (após filtro):', data.length);
       }
 
       // Converter Decimal para número (Prisma retorna Decimal como string)
+      // Converter datas para ISO string
       const normalizedData = data.map((inv: any) => ({
         ...inv,
         valorEstimado: inv.valorEstimado ? Number(inv.valorEstimado) : null,
+        dataPrevista: inv.dataPrevista ? inv.dataPrevista.toISOString() : null,
+        dataSolicitacao: inv.dataSolicitacao ? inv.dataSolicitacao.toISOString() : null,
+        dataChegada: inv.dataChegada ? inv.dataChegada.toISOString() : null,
+        createdAt: inv.createdAt.toISOString(),
+        updatedAt: inv.updatedAt.toISOString(),
       }));
 
       res.json(normalizedData);
@@ -159,12 +245,15 @@ investments.get('/:id', async (req, res) => {
       if (!investment) {
         return res.status(404).json({ error: true, message: 'Investimento não encontrado' });
       }
-      // Garantir que valorEstimado seja número
+      // Garantir que valorEstimado seja número e converter datas
       const normalizedInvestment = {
         ...investment,
         valorEstimado: typeof investment.valorEstimado === 'string' 
           ? parseFloat(investment.valorEstimado.replace(/[^\d.,-]/g, '').replace(',', '.')) 
           : (investment.valorEstimado ? Number(investment.valorEstimado) : null),
+        dataPrevista: investment.dataPrevista ? (typeof investment.dataPrevista === 'string' ? investment.dataPrevista : new Date(investment.dataPrevista).toISOString()) : null,
+        dataSolicitacao: investment.dataSolicitacao ? (typeof investment.dataSolicitacao === 'string' ? investment.dataSolicitacao : new Date(investment.dataSolicitacao).toISOString()) : null,
+        dataChegada: investment.dataChegada ? (typeof investment.dataChegada === 'string' ? investment.dataChegada : new Date(investment.dataChegada).toISOString()) : null,
       };
       res.json(normalizedInvestment);
     } else {
@@ -280,10 +369,15 @@ investments.post('/', async (req, res) => {
         },
       });
 
-      // Converter Decimal para número
+      // Converter Decimal para número e datas para ISO string
       const normalizedInvestment = {
         ...investment,
         valorEstimado: investment.valorEstimado ? Number(investment.valorEstimado) : null,
+        dataPrevista: investment.dataPrevista ? investment.dataPrevista.toISOString() : null,
+        dataSolicitacao: investment.dataSolicitacao ? investment.dataSolicitacao.toISOString() : null,
+        dataChegada: investment.dataChegada ? investment.dataChegada.toISOString() : null,
+        createdAt: investment.createdAt.toISOString(),
+        updatedAt: investment.updatedAt.toISOString(),
       };
 
       res.status(201).json(normalizedInvestment);
@@ -359,6 +453,10 @@ investments.patch('/:id', async (req, res) => {
       if (dataPrevista !== undefined) updateData.dataPrevista = dataPrevista ? new Date(dataPrevista) : null;
       if (observacoes !== undefined) updateData.observacoes = observacoes;
       if (sectorRoundId !== undefined) updateData.sectorRoundId = sectorRoundId;
+      // Campos de controle de compra
+      if (req.body.ordemCompra !== undefined) updateData.ordemCompra = req.body.ordemCompra || null;
+      if (req.body.dataSolicitacao !== undefined) updateData.dataSolicitacao = req.body.dataSolicitacao ? new Date(req.body.dataSolicitacao) : null;
+      if (req.body.dataChegada !== undefined) updateData.dataChegada = req.body.dataChegada ? new Date(req.body.dataChegada) : null;
 
       const investment = await prismaClient.investment.update({
         where: { id },
@@ -374,10 +472,15 @@ investments.patch('/:id', async (req, res) => {
         },
       });
 
-      // Converter Decimal para número
+      // Converter Decimal para número e datas para ISO string
       const normalizedInvestment = {
         ...investment,
         valorEstimado: investment.valorEstimado ? Number(investment.valorEstimado) : null,
+        dataPrevista: investment.dataPrevista ? investment.dataPrevista.toISOString() : null,
+        dataSolicitacao: investment.dataSolicitacao ? investment.dataSolicitacao.toISOString() : null,
+        dataChegada: investment.dataChegada ? investment.dataChegada.toISOString() : null,
+        createdAt: investment.createdAt.toISOString(),
+        updatedAt: investment.updatedAt.toISOString(),
       };
 
       res.json(normalizedInvestment);

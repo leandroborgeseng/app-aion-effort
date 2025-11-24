@@ -39,14 +39,7 @@ const upload = multer({
   },
 });
 
-let prisma: any = null;
-async function getPrisma() {
-  if (!prisma && !USE_MOCK) {
-    const { PrismaClient } = await import('@prisma/client');
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
+import { getPrisma } from '../services/prismaService';
 
 async function readContracts(): Promise<any[]> {
   if (USE_MOCK) {

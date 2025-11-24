@@ -16,6 +16,10 @@ import { users } from './routes/users';
 import { dashboard } from './routes/dashboard';
 import { config } from './routes/config';
 import { auth } from './routes/auth';
+import search from './routes/search';
+import savedFilters from './routes/savedFilters';
+import { purchaseRequests } from './routes/purchaseRequests';
+import { mel } from './routes/mel';
 import { helmetConfig, apiLimiter } from './middleware/security';
 import { errorMiddleware } from './utils/errorHandler';
 
@@ -45,6 +49,17 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Servir arquivos estáticos de uploads
 app.use('/uploads', express.static('uploads'));
+
+// Servir arquivo de documentação
+app.get('/DOCUMENTACAO_USUARIO.md', (_req, res) => {
+  const docPath = path.join(process.cwd(), 'public', 'DOCUMENTACAO_USUARIO.md');
+  if (fs.existsSync(docPath)) {
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.sendFile(docPath);
+  } else {
+    res.status(404).json({ error: true, message: 'Documentação não encontrada' });
+  }
+});
 
 // Health check (antes de tudo)
 app.get('/health', (_req, res) =>
@@ -92,10 +107,14 @@ app.use('/api/ecm/indicators', indicators);
 app.use('/api/ecm/alerts', alerts);
 app.use('/api/ecm/investments', investments);
 app.use('/api/ecm/os', os);
+app.use('/api/ecm/purchase-requests', purchaseRequests);
+app.use('/api/ecm/mel', mel);
 app.use('/api/auth', auth);
 app.use('/api/users', users);
 app.use('/api/dashboard', dashboard);
 app.use('/api/config', config);
+app.use('/api/search', search);
+app.use('/api/saved-filters', savedFilters);
 
 // Endpoint adicional para OS resumida
 app.get('/api/os/resumida', async (req, res) => {

@@ -6,6 +6,7 @@ import { theme } from '../styles/theme';
 import { usePermissions } from '../hooks/usePermissions';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { getResponsivePadding } from '../utils/responsive';
+import { getResponsiveGrid, getStatCardStyle, mobileStyles } from '../utils/mobileUtils';
 import { apiClient } from '../lib/apiClient';
 import LoadingSpinner from '../components/LoadingSpinner';
 import AvailabilityPieChart from '../components/AvailabilityPieChart';
@@ -24,10 +25,12 @@ export default function Dashboard() {
 
   // Debug: verificar setores permitidos
   useEffect(() => {
-    logger.debug('Dashboard carregado', { isAdmin, allowedSectors });
+    logger.debug('Dashboard carregado', { isAdmin, allowedSectors, setoresQuery: !isAdmin && allowedSectors.length > 0 ? allowedSectors.join(',') : undefined });
   }, [isAdmin, allowedSectors]);
 
   // Construir query string para setores se não for admin
+  // IMPORTANTE: Quando há personificação, isAdmin verifica o role do usuário personificado
+  // Se o usuário personificado não é admin, aplicamos o filtro de setores
   const setoresQuery = !isAdmin && allowedSectors.length > 0
     ? allowedSectors.join(',')
     : undefined;
@@ -91,76 +94,83 @@ export default function Dashboard() {
   // Buscar cronograma
   const currentYear = new Date().getFullYear();
   const { data: cronogramaData, isLoading: cronogramaLoading } = useQuery<CronogramaDTO[]>({
-    queryKey: ['dashboard', 'cronograma', setoresQuery],
+    queryKey: ['dashboard', 'cronograma', isAdmin ? 'all' : setoresQuery],
     queryFn: async () => {
       const params = new URLSearchParams({
         dataInicio: `${currentYear}-01-01`,
         dataFim: `${currentYear}-12-31`,
       });
       
+      // Admin vê todos os dados (não passa filtro de setores)
+      // Usuários não-admin passam filtro de setores
       if (!isAdmin && allowedSectors.length > 0) {
         params.append('setores', allowedSectors.join(','));
       }
       
-      return apiClient.get(`/api/ecm/lifecycle/cronograma?${params.toString()}`);
+      // Admin: forçar refresh do cache para garantir dados atualizados
+      if (isAdmin) {
+        params.append('forceRefresh', 'true');
+      }
+      
+      console.log('[Dashboard] Buscando cronograma - isAdmin:', isAdmin, 'params:', params.toString());
+      const result = await apiClient.get(`/api/ecm/lifecycle/cronograma?${params.toString()}`);
+      console.log('[Dashboard] Cronograma retornado:', Array.isArray(result) ? result.length : 'não é array', result);
+      
+      // Garantir que sempre retorna um array
+      return Array.isArray(result) ? result : [];
     },
   });
 
   // Buscar investimentos
   const { data: investmentsData, isLoading: investmentsLoading } = useQuery({
-    queryKey: ['dashboard', 'investments', setoresQuery, allowedSectors.join(',')],
+    queryKey: ['dashboard', 'investments', isAdmin ? 'all' : setoresQuery],
     queryFn: async () => {
       console.log('[Dashboard] Buscando investimentos - isAdmin:', isAdmin, 'allowedSectors:', allowedSectors);
       
-      // Se não for admin, buscar investimentos de cada setor permitido
-      if (!isAdmin && allowedSectors.length > 0) {
-        const allInvestments: any[] = [];
-        
-        // Buscar investimentos para cada setor permitido
-        const fetchPromises = allowedSectors.map(async (sectorId) => {
-          try {
-            console.log(`[Dashboard] Buscando investimentos para setor ${sectorId}`);
-            const res = await fetch(`/api/ecm/investments?sectorId=${sectorId}`);
-            if (res.ok) {
-              const investments = await res.json();
-              console.log(`[Dashboard] Investimentos encontrados para setor ${sectorId}:`, investments.length);
-              return investments || [];
-            }
-            console.warn(`[Dashboard] Erro ao buscar investimentos para setor ${sectorId}:`, res.status);
-            return [];
-          } catch (error) {
-            console.error(`[Dashboard] Erro ao buscar investimentos para setor ${sectorId}:`, error);
-            return [];
-          }
-        });
-        
-        const results = await Promise.all(fetchPromises);
-        results.forEach((investments) => {
-          allInvestments.push(...investments);
-        });
-        
-        console.log('[Dashboard] Total de investimentos coletados:', allInvestments.length);
-        
-        // Remover duplicatas (caso um investimento tenha múltiplos setores)
-        const uniqueInvestments = Array.from(
-          new Map(allInvestments.map((inv) => [inv.id, inv])).values()
-        );
-        
-        console.log('[Dashboard] Investimentos únicos após remoção de duplicatas:', uniqueInvestments.length);
-        
-        // Ordenar por data de criação (mais recentes primeiro)
-        return uniqueInvestments.sort(
-          (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-        );
-      } else {
-        // Admin vê todos os investimentos
+      // Admin vê todos os investimentos (sem filtro de setores)
+      if (isAdmin) {
         console.log('[Dashboard] Buscando todos os investimentos (admin)');
         const res = await fetch('/api/ecm/investments');
-        if (!res.ok) throw new Error('Erro ao buscar investimentos');
+        if (!res.ok) {
+          console.error('[Dashboard] Erro ao buscar investimentos:', res.status, res.statusText);
+          throw new Error('Erro ao buscar investimentos');
+        }
         const investments = await res.json();
-        console.log('[Dashboard] Total de investimentos (admin):', investments.length);
+        console.log('[Dashboard] Total de investimentos (admin):', Array.isArray(investments) ? investments.length : 'não é array', investments);
         // Ordenar por data de criação (mais recentes primeiro)
-        return investments.sort(
+        return Array.isArray(investments) ? investments.sort(
+          (a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        ) : [];
+      } else {
+        // Se não for admin, buscar todos os investimentos e filtrar por setores permitidos
+        if (allowedSectors.length === 0) {
+          console.log('[Dashboard] Usuário não-admin sem setores permitidos, retornando array vazio');
+          return [];
+        }
+        
+        // Buscar todos os investimentos (sem filtro de setor no backend)
+        // O componente InvestmentsList fará o filtro final por setores permitidos
+        console.log('[Dashboard] Buscando todos os investimentos para filtrar por setores:', allowedSectors);
+        const res = await fetch('/api/ecm/investments');
+        if (!res.ok) {
+          console.error('[Dashboard] Erro ao buscar investimentos:', res.status, res.statusText);
+          throw new Error('Erro ao buscar investimentos');
+        }
+        const allInvestments = await res.json();
+        console.log('[Dashboard] Total de investimentos recebidos:', Array.isArray(allInvestments) ? allInvestments.length : 'não é array');
+        
+        // Filtrar investimentos pelos setores permitidos (garantia extra no frontend)
+        const filteredInvestments = Array.isArray(allInvestments) 
+          ? allInvestments.filter((inv: any) => {
+              // Se o investimento tem sectorId e está na lista de setores permitidos, incluir
+              return inv.sectorId && allowedSectors.includes(inv.sectorId);
+            })
+          : [];
+        
+        console.log('[Dashboard] Investimentos filtrados por setores permitidos:', filteredInvestments.length);
+        
+        // Ordenar por data de criação (mais recentes primeiro)
+        return filteredInvestments.sort(
           (a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
         );
       }

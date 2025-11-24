@@ -3,16 +3,22 @@ import { useMemo } from 'react';
 import { useUser } from '../contexts/UserContext';
 
 export function usePermissions() {
-  const { user, getUserSectors, hasAccessToSector, getManagedUserIds, canViewUser } = useUser();
+  const { user, impersonation, getUserSectors, hasAccessToSector, getManagedUserIds, canViewUser } = useUser();
 
-  const isAdmin = user?.role === 'admin';
-  const isGerente = user?.role === 'gerente';
-  const isComum = user?.role === 'comum';
+  // Quando há personificação, usar o usuário personificado para verificar role
+  const currentUser = impersonation.isImpersonating 
+    ? impersonation.impersonatedUser 
+    : user;
+
+  const isAdmin = currentUser?.role === 'admin';
+  const isGerente = currentUser?.role === 'gerente';
+  const isComum = currentUser?.role === 'comum';
 
   // Setores permitidos para o usuário atual
+  // Depender diretamente do estado de personificação para garantir recálculo quando mudar
   const allowedSectors = useMemo(() => {
     return getUserSectors();
-  }, [getUserSectors]);
+  }, [getUserSectors, impersonation.isImpersonating, impersonation.impersonatedUser?.id, user?.id]);
 
   // Função para filtrar dados por setor
   const filterBySector = <T extends { Setor?: string; SetorId?: number }>(data: T[]): T[] => {
@@ -54,15 +60,43 @@ export function usePermissions() {
   };
 
   // Função para verificar se pode ver uma página específica
-  const canAccessPage = (page: string): boolean => {
+  // Agora verifica as permissões configuradas no banco de dados
+  const canAccessPage = async (page: string): Promise<boolean> => {
     if (isAdmin) return true;
     
-    // Páginas que todos podem acessar
+    try {
+      // Buscar permissão do banco usando o role do usuário atual (personificado ou não)
+      const res = await fetch(`/api/config/role-permissions/check?role=${currentUser?.role}&page=${page}`);
+      if (res.ok) {
+        const data = await res.json();
+        return data.canAccess !== false; // Se não estiver configurado, assume acesso
+      }
+    } catch (error) {
+      console.error('[usePermissions] Erro ao verificar permissão:', error);
+    }
+    
+    // Fallback: comportamento padrão se não conseguir verificar
+    // Páginas que todos podem acessar por padrão
     const publicPages = ['os', 'cronograma', 'rondas'];
     if (publicPages.includes(page)) return true;
     
-    // Páginas apenas para admin
-    const adminPages = ['usuarios', 'inventario'];
+    // Páginas apenas para admin por padrão
+    const adminPages = ['usuarios', 'inventario', 'permissoes'];
+    if (adminPages.includes(page)) return isAdmin;
+    
+    return true;
+  };
+
+  // Versão síncrona para uso imediato (usa cache ou padrão)
+  const canAccessPageSync = (page: string): boolean => {
+    if (isAdmin) return true;
+    
+    // Páginas que todos podem acessar por padrão
+    const publicPages = ['os', 'cronograma', 'rondas'];
+    if (publicPages.includes(page)) return true;
+    
+    // Páginas apenas para admin por padrão
+    const adminPages = ['usuarios', 'inventario', 'permissoes'];
     if (adminPages.includes(page)) return isAdmin;
     
     return true;
@@ -76,6 +110,7 @@ export function usePermissions() {
     filterBySector,
     canAccessSector,
     canAccessPage,
+    canAccessPageSync,
     canViewUser,
     getManagedUserIds,
   };

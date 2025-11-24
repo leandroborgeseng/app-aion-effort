@@ -299,7 +299,7 @@ export default function UsersPage() {
           </h3>
           <div style={{ display: 'grid', gap: theme.spacing.sm, gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Nome
               </label>
               <input
@@ -311,12 +311,14 @@ export default function UsersPage() {
                   padding: theme.spacing.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   fontSize: '14px',
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
                 placeholder="Nome completo"
               />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Email
               </label>
               <input
@@ -328,12 +330,14 @@ export default function UsersPage() {
                   padding: theme.spacing.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   fontSize: '14px',
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
                 placeholder="email@exemplo.com"
               />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Função
               </label>
               <select
@@ -344,15 +348,17 @@ export default function UsersPage() {
                   padding: theme.spacing.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   fontSize: '14px',
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               >
-                <option value="comum">Usuário Comum</option>
-                <option value="admin">Administrador</option>
-                <option value="gerente">Gerente</option>
+                <option value="comum" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Usuário Comum</option>
+                <option value="admin" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Administrador</option>
+                <option value="gerente" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Gerente</option>
               </select>
             </div>
             <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 <input
                   type="checkbox"
                   checked={formData.active !== false}
@@ -360,7 +366,7 @@ export default function UsersPage() {
                 />
                 Ativo
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs, fontSize: '14px', fontWeight: 500, marginTop: theme.spacing.xs }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs, fontSize: '14px', fontWeight: 500, marginTop: theme.spacing.xs, color: theme.colors.dark }}>
                 <input
                   type="checkbox"
                   checked={formData.canImpersonate || false}
@@ -373,7 +379,7 @@ export default function UsersPage() {
           {/* Setores - apenas para usuários comuns */}
           {(formData.role === 'comum' || !formData.role) && (
             <div style={{ marginTop: theme.spacing.md }}>
-              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Setores (apenas para usuários comuns) *
               </label>
               {sectors && sectors.length > 0 ? (
@@ -450,7 +456,7 @@ export default function UsersPage() {
           {/* Usuários gerenciados - apenas para gerentes */}
           {formData.role === 'gerente' && (
             <div style={{ marginTop: theme.spacing.md }}>
-              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Usuários Gerenciados (apenas para gerentes)
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: theme.spacing.xs }}>

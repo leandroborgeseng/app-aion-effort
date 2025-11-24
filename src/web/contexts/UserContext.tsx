@@ -24,6 +24,7 @@ interface User {
   id: string;
   email: string;
   name: string;
+  phone?: string;
   role: UserRole;
   active: boolean;
   canImpersonate: boolean;
@@ -54,12 +55,39 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUserState] = useState<User | null>(null);
-  const [impersonation, setImpersonationState] = useState<ImpersonationState>({
-    isImpersonating: false,
-    originalUser: null,
-    impersonatedUser: null,
+  // Tentar carregar usuário do localStorage ao inicializar
+  const [user, setUserState] = useState<User | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('user');
+        if (stored) {
+          return JSON.parse(stored);
+        }
+      } catch (e) {
+        console.error('[UserContext] Erro ao carregar usuário do localStorage:', e);
+      }
+    }
+    return null;
   });
+  
+  const [impersonation, setImpersonationState] = useState<ImpersonationState>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('impersonation');
+        if (stored) {
+          return JSON.parse(stored);
+        }
+      } catch (e) {
+        console.error('[UserContext] Erro ao carregar personificação do localStorage:', e);
+      }
+    }
+    return {
+      isImpersonating: false,
+      originalUser: null,
+      impersonatedUser: null,
+    };
+  });
+  
   const [isLoading, setIsLoading] = useState(true);
 
   // Carregar usuário atual ao iniciar

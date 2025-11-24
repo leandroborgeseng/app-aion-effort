@@ -98,3 +98,120 @@ export function getSectorNamesFromIds(sectorIds: number[]): string[] {
     .filter((name): name is string => name !== null);
 }
 
+/**
+ * Busca nomes dos setores - mesma lógica usada no inventário
+ * 1. Tenta buscar da tabela SectorMapping
+ * 2. Se não encontrar, busca da API de investimentos (/api/ecm/investments/sectors/list)
+ * 3. Fallback para mapeamento fixo
+ * 
+ * @param sectorIds - IDs dos setores para buscar nomes
+ * @param req - Request object (opcional) para buscar da API de investimentos
+ */
+export async function getSectorNamesFromUserSector(
+  sectorIds: number[],
+  equipamentos?: any[],
+  userId?: string,
+  req?: any // Request object para fazer fetch interno
+): Promise<string[]> {
+  const nomes: string[] = [];
+  
+  try {
+    const { getPrisma } = await import('../services/prismaService');
+    const prismaClient = await getPrisma();
+    
+    if (!prismaClient) {
+      throw new Error('Prisma não disponível');
+    }
+
+    // Criar mapa de IDs para nomes (será preenchido com nomes encontrados)
+    const sectorIdToNameMap = new Map<number, string>();
+    
+    // Passo 1: Buscar da tabela SectorMapping (mesma lógica do inventário)
+    try {
+      const sectorMappings = await prismaClient.sectorMapping.findMany({
+        where: {
+          systemSectorId: { in: sectorIds },
+          active: true,
+        },
+      });
+      
+      sectorMappings.forEach((mapping) => {
+        const name = mapping.systemSectorName || mapping.effortSectorName;
+        if (name && !sectorIdToNameMap.has(mapping.systemSectorId)) {
+          sectorIdToNameMap.set(mapping.systemSectorId, name);
+        }
+      });
+    } catch (error) {
+      console.error('[getSectorNamesFromUserSector] Erro ao buscar SectorMapping:', error);
+    }
+    
+    // Passo 2: Se não encontrou todos, buscar da API de investimentos (mesma lógica do inventário)
+    const sectorIdsSemNome = sectorIds.filter((id) => !sectorIdToNameMap.has(id));
+    
+    if (sectorIdsSemNome.length > 0 && req) {
+      try {
+        const sectorsRes = await fetch(`${req.protocol}://${req.get('host')}/api/ecm/investments/sectors/list`);
+        if (sectorsRes.ok) {
+          const sectorsData = await sectorsRes.json();
+          const sectorsFromApi = sectorsData.sectors
+            ?.filter((s: any) => sectorIdsSemNome.includes(s.id))
+            .map((s: any) => ({ id: s.id, name: s.name })) || [];
+          
+          sectorsFromApi.forEach((s: any) => {
+            if (s.name && !sectorIdToNameMap.has(s.id)) {
+              sectorIdToNameMap.set(s.id, s.name);
+            }
+          });
+        }
+      } catch (apiError: any) {
+        console.warn('[getSectorNamesFromUserSector] Erro ao buscar da API de investimentos:', apiError?.message);
+      }
+    }
+    
+    // Passo 3: Preencher resultado final na ordem dos sectorIds
+    for (const id of sectorIds) {
+      let nomeEncontrado = sectorIdToNameMap.get(id);
+      
+      // Se não encontrou no mapeamento, tentar dos equipamentos
+      if (!nomeEncontrado && equipamentos) {
+        for (const eq of equipamentos) {
+          const sectorId = getSectorIdFromItem(eq);
+          if (sectorId === id && eq.Setor) {
+            nomeEncontrado = eq.Setor;
+            break;
+          }
+        }
+      }
+      
+      // Último fallback: mapeamento fixo
+      if (!nomeEncontrado) {
+        nomeEncontrado = getSectorNameFromId(id) || `Setor ${id}`;
+      }
+      
+      nomes.push(nomeEncontrado);
+    }
+  } catch (error) {
+    console.error('[getSectorNamesFromUserSector] Erro:', error);
+    // Fallback completo
+    sectorIds.forEach((id) => {
+      let nomeEncontrado = false;
+      if (equipamentos) {
+        for (const eq of equipamentos) {
+          const sectorId = getSectorIdFromItem(eq);
+          if (sectorId === id && eq.Setor) {
+            nomes.push(eq.Setor);
+            nomeEncontrado = true;
+            break;
+          }
+        }
+      }
+      if (!nomeEncontrado) {
+        const nomeMapeado = getSectorNameFromId(id);
+        nomes.push(nomeMapeado || `Setor ${id}`);
+      }
+    });
+  }
+  
+  return nomes;
+}
+

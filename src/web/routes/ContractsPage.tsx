@@ -625,7 +625,7 @@ export default function ContractsPage() {
             }}
           >
             <div>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500 }}>
+              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500, color: theme.colors.dark }}>
                 Nome do Contrato *
               </label>
               <input
@@ -636,12 +636,14 @@ export default function ContractsPage() {
                   width: '100%',
                   padding: theme.spacing.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               />
             </div>
             
             <div>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500 }}>
+              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500, color: theme.colors.dark }}>
                 Fornecedor *
               </label>
               <input
@@ -652,12 +654,14 @@ export default function ContractsPage() {
                   width: '100%',
                   padding: theme.spacing.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               />
             </div>
             
             <div>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500 }}>
+              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500, color: theme.colors.dark }}>
                 Tipo de Contrato *
               </label>
               <select
@@ -667,18 +671,20 @@ export default function ContractsPage() {
                   width: '100%',
                   padding: theme.spacing.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               >
-                <option value="">Selecione...</option>
-                <option value="Preventiva">Preventiva</option>
-                <option value="Corretiva">Corretiva</option>
-                <option value="Misto">Misto</option>
-                <option value="Full Service">Full Service</option>
+                <option value="" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Selecione...</option>
+                <option value="Preventiva" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Preventiva</option>
+                <option value="Corretiva" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Corretiva</option>
+                <option value="Misto" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Misto</option>
+                <option value="Full Service" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Full Service</option>
               </select>
             </div>
             
             <div>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500 }}>
+              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500, color: theme.colors.dark }}>
                 Valor Anual (R$) *
               </label>
               <input
@@ -691,12 +697,14 @@ export default function ContractsPage() {
                   width: '100%',
                   padding: theme.spacing.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               />
             </div>
             
             <div>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500 }}>
+              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500, color: theme.colors.dark }}>
                 Data Início *
               </label>
               <input
@@ -709,12 +717,14 @@ export default function ContractsPage() {
                   width: '100%',
                   padding: theme.spacing.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               />
             </div>
             
             <div>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500 }}>
+              <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500, color: theme.colors.dark }}>
                 Data Fim *
               </label>
               <input
@@ -727,6 +737,8 @@ export default function ContractsPage() {
                   width: '100%',
                   padding: theme.spacing.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               />
             </div>
@@ -734,7 +746,7 @@ export default function ContractsPage() {
 
           {/* Campo de Descrição */}
           <div style={{ marginTop: theme.spacing.md }}>
-            <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500 }}>
+            <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500, color: theme.colors.dark }}>
               Descrição do Contrato
             </label>
             <textarea
@@ -750,6 +762,8 @@ export default function ContractsPage() {
                 fontFamily: 'inherit',
                 fontSize: '14px',
                 resize: 'vertical',
+                backgroundColor: theme.colors.white,
+                color: theme.colors.dark,
               }}
             />
           </div>
@@ -757,7 +771,7 @@ export default function ContractsPage() {
           {/* Seleção de Equipamentos */}
           <div style={{ marginTop: theme.spacing.md }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.xs }}>
-              <label style={{ fontSize: '12px', fontWeight: 500 }}>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: theme.colors.dark }}>
                 Equipamentos Vinculados
               </label>
               <button
@@ -859,7 +873,7 @@ export default function ContractsPage() {
 
           {/* Upload de Arquivo */}
           <div style={{ marginTop: theme.spacing.md }}>
-            <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500 }}>
+            <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500, color: theme.colors.dark }}>
               Arquivo do Contrato
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
@@ -872,6 +886,8 @@ export default function ContractsPage() {
                   padding: theme.spacing.sm,
                   border: `1px solid ${theme.colors.gray[300]}`,
                   borderRadius: theme.borderRadius.sm,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
                 }}
               />
               {formData.arquivoUrl && (
@@ -903,7 +919,7 @@ export default function ContractsPage() {
 
           {/* Observações */}
           <div style={{ marginTop: theme.spacing.md }}>
-            <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500 }}>
+            <label style={{ display: 'block', fontSize: '12px', marginBottom: theme.spacing.xs, fontWeight: 500, color: theme.colors.dark }}>
               Observações
             </label>
             <textarea
@@ -919,6 +935,8 @@ export default function ContractsPage() {
                 fontFamily: 'inherit',
                 fontSize: '14px',
                 resize: 'vertical',
+                backgroundColor: theme.colors.white,
+                color: theme.colors.dark,
               }}
             />
           </div>

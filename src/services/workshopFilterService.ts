@@ -91,15 +91,24 @@ export async function filterOSByWorkshop<T extends { Oficina?: string | null }>(
     return [];
   }
 
+  // Se a lista está vazia, retornar vazia
+  if (osList.length === 0) {
+    return [];
+  }
+
   try {
     const enabledWorkshops = await getEnabledWorkshops();
 
     // Se não há oficinas configuradas, retornar todas (não filtrar)
+    // Isso significa que o sistema está configurado para não filtrar por oficina
     if (enabledWorkshops.size === 0) {
+      console.log('[workshopFilter] Nenhuma oficina configurada, retornando todas as OS sem filtrar');
       return osList;
     }
 
-    return osList.filter((os) => {
+    console.log(`[workshopFilter] Filtrando ${osList.length} OS com ${enabledWorkshops.size} oficinas habilitadas`);
+    
+    const filtradas = osList.filter((os) => {
       if (!os || typeof os !== 'object') {
         return false; // Remover entradas inválidas
       }
@@ -107,11 +116,18 @@ export async function filterOSByWorkshop<T extends { Oficina?: string | null }>(
       if (!oficina || typeof oficina !== 'string' || oficina.trim() === '') {
         return true; // Se não tem oficina, manter
       }
-      return enabledWorkshops.has(oficina.trim());
+      const oficinaTrimmed = oficina.trim();
+      const estaHabilitada = enabledWorkshops.has(oficinaTrimmed);
+      return estaHabilitada;
     });
+    
+    console.log(`[workshopFilter] ${filtradas.length} OS passaram no filtro (de ${osList.length})`);
+    return filtradas;
   } catch (error: any) {
     console.error('[workshopFilter] Erro ao filtrar OS por oficina:', error);
-    // Em caso de erro, retornar todas (não filtrar)
+    console.error('[workshopFilter] Stack:', error?.stack);
+    // Em caso de erro, retornar todas (não filtrar) para não quebrar o sistema
+    console.warn('[workshopFilter] Retornando todas as OS devido ao erro');
     return osList;
   }
 }
@@ -171,27 +187,80 @@ export async function filterOSByWorkshopClassification<T extends { Oficina?: str
       return osList;
     }
 
-    // Buscar todas as configurações de oficinas com classificação (value não vazio)
+    // Buscar TODAS as configurações de oficinas primeiro para debug
+    const todasConfigs = await prisma.systemConfig.findMany({
+      where: {
+        category: 'workshop',
+      },
+    });
+    
+    console.log(`[workshopFilter] === DEBUG OFICINAS ===`);
+    console.log(`[workshopFilter] Total de configurações de oficinas no banco: ${todasConfigs.length}`);
+    todasConfigs.forEach(config => {
+      console.log(`[workshopFilter]   - Oficina: "${config.key}" | Value: "${config.value || 'null'}" | Active: ${config.active}`);
+    });
+
+    // Buscar todas as configurações de oficinas ATIVAS (active=true)
     const configs = await prisma.systemConfig.findMany({
       where: {
         category: 'workshop',
-        value: { not: null },
+        active: true, // Apenas oficinas ativas
       },
     });
+    
+    // Filtrar apenas oficinas com value="enabled" (oficinas habilitadas)
+    const oficinasHabilitadas = configs.filter(config => {
+      const value = (config.value || '').trim().toLowerCase();
+      return value === 'enabled';
+    });
 
-    // Criar Set com oficinas que têm classificação
+    console.log(`[workshopFilter] Oficinas ativas encontradas: ${configs.length}`);
+    console.log(`[workshopFilter] Oficinas habilitadas (value="enabled"): ${oficinasHabilitadas.length}`);
+    oficinasHabilitadas.forEach(config => {
+      console.log(`[workshopFilter]   ✓ Oficina HABILITADA: "${config.key}" | Value: "${config.value}"`);
+    });
+
+    // Criar Set com oficinas que estão habilitadas (value="enabled" e active=true)
     const workshopsWithClassification = new Set<string>(
-      configs
-        .filter(config => config.value && config.value.trim() !== '')
-        .map(config => config.key.trim())
+      oficinasHabilitadas.map(config => config.key.trim().toUpperCase())
     );
+    
+    console.log(`[workshopFilter] Oficinas que serão consideradas (normalizadas): ${Array.from(workshopsWithClassification).join(', ')}`);
 
-    // Se não há oficinas com classificação configuradas, retornar todas
+    // Se não há oficinas habilitadas configuradas, retornar array vazio
+    // (NÃO retornar todas as OS, pois isso causaria o problema que estamos vendo)
     if (workshopsWithClassification.size === 0) {
-      return osList;
+      console.warn('[workshopFilter] ⚠️ Nenhuma oficina habilitada (value="enabled") encontrada!');
+      console.warn('[workshopFilter] ⚠️ Retornando array vazio para evitar incluir OS de oficinas não habilitadas');
+      return [];
     }
 
-    return osList.filter((os) => {
+    const antes = osList.length;
+    
+    // Contar oficinas únicas nas OS para debug
+    const oficinasUnicas = new Set<string>();
+    osList.forEach((os: any) => {
+      if (os && os.Oficina && typeof os.Oficina === 'string') {
+        oficinasUnicas.add(os.Oficina.trim().toUpperCase());
+      }
+    });
+    console.log(`[workshopFilter] Oficinas únicas encontradas nas ${antes} OS: ${Array.from(oficinasUnicas).join(', ')}`);
+    
+    // Mapear quais oficinas das OS estão nas configuradas
+    const oficinasEncontradas = new Set<string>();
+    const oficinasNaoEncontradas = new Set<string>();
+    oficinasUnicas.forEach(oficina => {
+      if (workshopsWithClassification.has(oficina)) {
+        oficinasEncontradas.add(oficina);
+      } else {
+        oficinasNaoEncontradas.add(oficina);
+      }
+    });
+    
+    console.log(`[workshopFilter] Oficinas das OS que ESTÃO classificadas: ${Array.from(oficinasEncontradas).join(', ')}`);
+    console.log(`[workshopFilter] Oficinas das OS que NÃO estão classificadas: ${Array.from(oficinasNaoEncontradas).join(', ')}`);
+    
+    const filtradas = osList.filter((os) => {
       if (!os || typeof os !== 'object') {
         return false;
       }
@@ -199,11 +268,24 @@ export async function filterOSByWorkshopClassification<T extends { Oficina?: str
       if (!oficina || typeof oficina !== 'string' || oficina.trim() === '') {
         return false; // Sem oficina = excluir
       }
-      return workshopsWithClassification.has(oficina.trim());
+      const oficinaNormalizada = oficina.trim().toUpperCase();
+      const estaHabilitada = workshopsWithClassification.has(oficinaNormalizada);
+      return estaHabilitada;
     });
+    
+    console.log(`[workshopFilter] === RESULTADO DO FILTRO ===`);
+    console.log(`[workshopFilter] Total de OS antes: ${antes}`);
+    console.log(`[workshopFilter] Total de OS após filtro: ${filtradas.length}`);
+    console.log(`[workshopFilter] OS excluídas: ${antes - filtradas.length}`);
+    console.log(`[workshopFilter] ==========================`);
+    
+    return filtradas;
   } catch (error: any) {
     console.error('[workshopFilter] Erro ao filtrar OS por classificação de oficina:', error);
-    return osList;
+    console.error('[workshopFilter] Stack:', error?.stack);
+    // Em caso de erro, retornar array vazio para não incluir OS de oficinas não configuradas
+    console.warn('[workshopFilter] ⚠️ Retornando array vazio devido ao erro');
+    return [];
   }
 }
 

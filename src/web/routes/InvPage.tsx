@@ -1,9 +1,15 @@
 import React, { useState, useMemo, useCallback, memo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FiPackage, FiAlertCircle, FiCheckCircle, FiStar, FiEye, FiClock, FiX, FiFilter } from 'react-icons/fi';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { useSearchParams } from 'react-router-dom';
+import { FiPackage, FiAlertCircle, FiCheckCircle, FiStar, FiEye, FiX, FiFilter, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList } from 'recharts';
 import toast from 'react-hot-toast';
 import DataTable from '../components/DataTable';
+import VirtualizedDataTable from '../components/VirtualizedDataTable';
+import ExportButton from '../components/ExportButton';
+import SavedFiltersManager from '../components/SavedFiltersManager';
+import SkeletonScreen from '../components/SkeletonScreen';
+import ErrorMessage from '../components/ErrorMessage';
 import { theme } from '../styles/theme';
 import { usePermissions } from '../hooks/usePermissions';
 import { useIsMobile } from '../hooks/useMediaQuery';
@@ -27,6 +33,7 @@ export default function InvPage() {
   const { isAdmin, allowedSectors } = usePermissions();
   const isMobile = useIsMobile();
   const padding = getResponsivePadding(isMobile, false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [selectedEquipment, setSelectedEquipment] = useState<EquipamentoDTO | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ column: '', direction: null });
@@ -37,8 +44,47 @@ export default function InvPage() {
     idade: null as string | null, // '0-2', '2-5', '5-10', '10+', null
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [isTableMinimized, setIsTableMinimized] = useState(true); // Começar colapsado
+  const [tableFilters, setTableFilters] = useState({
+    tipo: '' as string, // Criticidade ou Prioridade
+    setor: '' as string,
+    idade: '' as string, // '0-2', '2-5', '5-10', '10+'
+  });
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const queryClient = useQueryClient();
+
+  // Carregar filtro compartilhado da URL
+  useEffect(() => {
+    const filterToken = searchParams.get('filter');
+    if (filterToken) {
+      fetch(`/api/saved-filters/shared/${filterToken}`)
+        .then((res) => res.json())
+        .then((filter) => {
+          try {
+            const loadedFilters = JSON.parse(filter.filters);
+            // Aplicar filtros carregados
+            if (loadedFilters.tableFilters) {
+              setTableFilters(loadedFilters.tableFilters);
+            }
+            if (loadedFilters.filters) {
+              setFilters(loadedFilters.filters);
+            }
+            if (loadedFilters.searchTerm) {
+              setSearchTerm(loadedFilters.searchTerm);
+            }
+            toast.success(`Filtro "${filter.name}" carregado!`);
+            // Remover token da URL após carregar
+            setSearchParams({}, { replace: true });
+          } catch (error) {
+            toast.error('Erro ao carregar filtro compartilhado');
+          }
+        })
+        .catch(() => {
+          toast.error('Filtro compartilhado não encontrado');
+          setSearchParams({}, { replace: true });
+        });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Construir query string para setores se não for admin
   const setoresQuery = !isAdmin && allowedSectors.length > 0
@@ -208,7 +254,7 @@ export default function InvPage() {
       } else if (column === 'ValorDeSubstituicao') {
         aValue = parseBrazilianCurrency(aValue || '0');
         bValue = parseBrazilianCurrency(bValue || '0');
-      } else if (column === 'DataDeAquisicao') {
+      } else if (column === 'DataDeCadastro' || column === 'DataDeAquisicao') {
         aValue = aValue ? new Date(aValue).getTime() : 0;
         bValue = bValue ? new Date(bValue).getTime() : 0;
       } else if (column === 'ValidadeDoRegistroAnvisa' || column === 'EndOfLife' || column === 'EndOfService') {
@@ -266,6 +312,7 @@ export default function InvPage() {
       equipment.ValorDeAquisicao,
       equipment.ValorDeSubstituicao,
       // Datas (buscar também no formato brasileiro)
+      equipment.DataDeCadastro ? formatBrazilianDate(equipment.DataDeCadastro) : '',
       equipment.DataDeAquisicao ? formatBrazilianDate(equipment.DataDeAquisicao) : '',
       equipment.DataDeFabricacao ? formatBrazilianDate(equipment.DataDeFabricacao) : '',
       equipment.DataDeInstalação ? formatBrazilianDate(equipment.DataDeInstalação) : '',
@@ -322,21 +369,22 @@ export default function InvPage() {
       });
     }
 
-    // Filtro de idade
+    // Filtro de idade (usa APENAS DataDeCadastro)
     if (filters.idade) {
       const hoje = new Date();
       filtered = filtered.filter((e) => {
-        if (!e.DataDeAquisicao || e.DataDeAquisicao.trim() === '') {
+        // Usa APENAS DataDeCadastro
+        if (!e.DataDeCadastro || e.DataDeCadastro.trim() === '') {
           return filters.idade === 'sem-data';
         }
 
         try {
-          const dataAquisicao = new Date(e.DataDeAquisicao);
-          if (isNaN(dataAquisicao.getTime())) {
+          const dataCadastro = new Date(e.DataDeCadastro);
+          if (isNaN(dataCadastro.getTime())) {
             return filters.idade === 'sem-data';
           }
 
-          const diffTime = hoje.getTime() - dataAquisicao.getTime();
+          const diffTime = hoje.getTime() - dataCadastro.getTime();
           const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25);
 
           if (diffYears < 0) {
@@ -356,13 +404,54 @@ export default function InvPage() {
       });
     }
 
+    // Aplicar filtros da tabela (tipo, setor, idade)
+    if (tableFilters.tipo) {
+      filtered = filtered.filter((e) => e.Equipamento === tableFilters.tipo);
+    }
+    if (tableFilters.setor) {
+      filtered = filtered.filter((e) => e.Setor === tableFilters.setor);
+    }
+    if (tableFilters.idade) {
+      const hoje = new Date();
+      filtered = filtered.filter((e) => {
+        // Usa APENAS DataDeCadastro
+        if (!e.DataDeCadastro || e.DataDeCadastro.trim() === '') {
+          return tableFilters.idade === 'sem-data';
+        }
+
+        try {
+          const dataCadastro = new Date(e.DataDeCadastro);
+          if (isNaN(dataCadastro.getTime())) {
+            return tableFilters.idade === 'sem-data';
+          }
+
+          const diffTime = hoje.getTime() - dataCadastro.getTime();
+          const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25);
+
+          if (diffYears < 0) {
+            return tableFilters.idade === '0-2';
+          } else if (diffYears < 2) {
+            return tableFilters.idade === '0-2';
+          } else if (diffYears < 5) {
+            return tableFilters.idade === '2-5';
+          } else if (diffYears < 10) {
+            return tableFilters.idade === '5-10';
+          } else {
+            return tableFilters.idade === '10+';
+          }
+        } catch {
+          return tableFilters.idade === 'sem-data';
+        }
+      });
+    }
+
     // Aplicar ordenação
     if (sortConfig.direction) {
       filtered = sortData(filtered, sortConfig.column, sortConfig.direction);
     }
 
     return filtered;
-  }, [data, debouncedSearchTerm, filters.anvisaVencida, filters.eolProximo, filters.eosProximo, filters.idade, sortConfig, isEolProximo, isEosProximo, searchInAllFields]);
+  }, [data, debouncedSearchTerm, filters.anvisaVencida, filters.eolProximo, filters.eosProximo, filters.idade, tableFilters, sortConfig, isEolProximo, isEosProximo, searchInAllFields]);
 
   const handleSelectRow = (id: number, selected: boolean) => {
     const newSelected = new Set(selectedRows);
@@ -500,7 +589,37 @@ export default function InvPage() {
     ].filter((item) => item.value > 0); // Filtrar categorias sem valor
   }, [data, isAnvisaVencida, isEolProximo, isEosProximo]);
 
+  // Calcular custo de substituição por setor (Top 10)
+  const custoPorSetorData = useMemo(() => {
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    const setorMap = new Map<string, number>();
+
+    data.forEach((e) => {
+      const setor = e.Setor?.trim() || 'Sem Setor';
+      if (e.ValorDeSubstituicao) {
+        const valor = parseBrazilianCurrency(e.ValorDeSubstituicao);
+        if (!isNaN(valor) && valor > 0) {
+          const atual = setorMap.get(setor) || 0;
+          setorMap.set(setor, atual + valor);
+        }
+      }
+    });
+
+    // Converter para array, ordenar por valor e pegar top 10
+    return Array.from(setorMap.entries())
+      .map(([setor, valor]) => ({
+        setor,
+        valor,
+      }))
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 10);
+  }, [data]);
+
   // Calcular idade dos equipamentos para o gráfico de pizza
+  // Usa APENAS DataDeCadastro (todos os equipamentos devem ter esta data)
   const idadeChartData = useMemo(() => {
     if (!data || data.length === 0) {
       return [];
@@ -514,19 +633,20 @@ export default function InvPage() {
     let semData = 0;
 
     data.forEach((e) => {
-      if (!e.DataDeAquisicao || e.DataDeAquisicao.trim() === '') {
+      // Usa APENAS DataDeCadastro
+      if (!e.DataDeCadastro || e.DataDeCadastro.trim() === '') {
         semData++;
         return;
       }
 
       try {
-        const dataAquisicao = new Date(e.DataDeAquisicao);
-        if (isNaN(dataAquisicao.getTime())) {
+        const dataCadastro = new Date(e.DataDeCadastro);
+        if (isNaN(dataCadastro.getTime())) {
           semData++;
           return;
         }
 
-        const diffTime = hoje.getTime() - dataAquisicao.getTime();
+        const diffTime = hoje.getTime() - dataCadastro.getTime();
         const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25);
 
         if (diffYears < 0) {
@@ -652,38 +772,28 @@ export default function InvPage() {
     setSortConfig({ column, direction });
   };
 
-  if (isLoading) {
-    return (
-      <div style={{ padding: padding, textAlign: 'center' }}>
-        <LoadingSpinner text="Carregando inventário..." />
-      </div>
-    );
-  }
+  // Calcular tipos de equipamentos com contagem (deve estar antes de qualquer return)
+  const tiposComContagem = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    const tipoCount = new Map<string, number>();
+    data.forEach((e) => {
+      if (e.Equipamento) {
+        const count = tipoCount.get(e.Equipamento) || 0;
+        tipoCount.set(e.Equipamento, count + 1);
+      }
+    });
+    
+    return Array.from(tipoCount.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([tipo, quantidade]) => ({
+        tipo,
+        quantidade,
+        label: `${tipo} - ${quantidade}`,
+      }));
+  }, [data]);
 
-  if (error) {
-    return (
-      <div
-        style={{
-          padding: theme.spacing.md,
-          backgroundColor: `${theme.colors.danger}15`,
-          borderRadius: theme.borderRadius.md,
-          color: theme.colors.danger,
-        }}
-      >
-        Erro ao carregar dados: {String(error)}
-      </div>
-    );
-  }
-
-  if (!data || data.length === 0) {
-    return (
-      <div style={{ padding: theme.spacing.md }}>
-        <p>Nenhum equipamento encontrado</p>
-      </div>
-    );
-  }
-
-  const columns = [
+  // Definir colunas ANTES dos early returns para evitar erro de hooks
+  const columns = useMemo(() => [
     {
       key: '_index' as any,
       label: '#',
@@ -906,13 +1016,25 @@ export default function InvPage() {
       ),
     },
     {
-      key: 'DataDeAquisicao' as keyof EquipamentoDTO,
+      key: 'DataDeCadastro' as keyof EquipamentoDTO,
       label: 'Ano',
       width: '80px',
       sortable: true,
-      render: (value: string) => {
-        const year = value ? new Date(value).getFullYear() : '-';
-        return year;
+      render: (value: string, row: EquipamentoDTO) => {
+        // Usa DataDeCadastro para mostrar o ano
+        const dataCadastro = row.DataDeCadastro || value;
+        if (!dataCadastro || dataCadastro.trim() === '') {
+          return '-';
+        }
+        try {
+          const date = new Date(dataCadastro);
+          if (isNaN(date.getTime())) {
+            return '-';
+          }
+          return date.getFullYear();
+        } catch {
+          return '-';
+        }
       },
     },
     {
@@ -990,7 +1112,58 @@ export default function InvPage() {
         );
       },
     },
-  ];
+  ], [toggleCriticalMutation, toggleMonitoredMutation, setSelectedEquipment, isAnvisaVencida, isEolProximo, isEosProximo, formatDate, formatCurrency, getCriticidadeColor]);
+
+  // Colunas para exportação (sem render functions e sem colunas de ação)
+  // IMPORTANTE: Este useMemo deve estar ANTES dos early returns
+  const exportColumns = useMemo(() => {
+    // Se columns ainda não foi definido (durante loading), retornar array vazio
+    if (!columns || columns.length === 0) return [];
+    return columns
+      .filter((col) => {
+        const key = String(col.key);
+        // Excluir colunas de índice, ações e botões interativos
+        return (
+          key !== '_index' &&
+          key !== 'IsCritical' &&
+          key !== 'IsMonitored' &&
+          key !== 'actions'
+        );
+      })
+      .map((col) => ({
+        key: String(col.key),
+        label: col.label,
+      }));
+  }, [columns]);
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: padding, minHeight: '100vh', overflowY: 'auto' }}>
+        <SkeletonScreen type="table" rows={10} columns={15} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: padding }}>
+        <ErrorMessage
+          title="Erro ao carregar inventário"
+          message={error instanceof Error ? error.message : 'Não foi possível carregar o inventário. Verifique sua conexão e tente novamente.'}
+          onRetry={() => queryClient.invalidateQueries({ queryKey: ['inv'] })}
+          retryText="Tentar novamente"
+        />
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <div style={{ padding: theme.spacing.md }}>
+        <p>Nenhum equipamento encontrado</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -998,6 +1171,8 @@ export default function InvPage() {
         padding: padding,
         maxWidth: '1600px',
         margin: '0 auto',
+        minHeight: '100vh',
+        overflowY: 'auto',
       }}
     >
       {/* Header */}
@@ -1028,29 +1203,35 @@ export default function InvPage() {
               Gestão do ciclo de vida dos equipamentos médicos
             </p>
           </div>
-          {dataUpdatedAt && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: theme.spacing.xs,
-                padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                backgroundColor: theme.colors.gray[50],
-                borderRadius: theme.borderRadius.sm,
-                fontSize: '12px',
-                color: theme.colors.gray[700],
-                whiteSpace: 'nowrap',
+          <div style={{ display: 'flex', gap: theme.spacing.sm, alignItems: 'center', flexWrap: 'wrap' }}>
+            <SavedFiltersManager
+              page="inventario"
+              currentFilters={{
+                filters,
+                tableFilters,
+                searchTerm,
               }}
-            >
-              <FiClock size={14} color={theme.colors.gray[600]} />
-              <span>
-                Última sincronização:{' '}
-                <strong>
-                  {formatBrazilianDate(dataUpdatedAt)}
-                </strong>
-              </span>
-            </div>
-          )}
+              onLoadFilter={(loadedFilters) => {
+                if (loadedFilters.tableFilters) {
+                  setTableFilters(loadedFilters.tableFilters);
+                }
+                if (loadedFilters.filters) {
+                  setFilters(loadedFilters.filters);
+                }
+                if (loadedFilters.searchTerm) {
+                  setSearchTerm(loadedFilters.searchTerm);
+                }
+              }}
+            />
+            {filteredData && filteredData.length > 0 && (
+              <ExportButton
+                data={filteredData}
+                filename={`inventario-${new Date().toISOString().split('T')[0]}`}
+                columns={exportColumns}
+                variant="both"
+                label="Exportar"
+              />
+            )}
         </div>
       </div>
 
@@ -1516,6 +1697,118 @@ export default function InvPage() {
         )}
       </div>
 
+      {/* Gráfico de Barras - Top 10 Setores por Custo de Substituição */}
+      {custoPorSetorData.length > 0 && (
+        <div
+          style={{
+            padding: theme.spacing.lg,
+            backgroundColor: theme.colors.white,
+            borderRadius: theme.borderRadius.md,
+            boxShadow: theme.shadows.sm,
+            marginBottom: theme.spacing.lg,
+          }}
+        >
+          <h3
+            style={{
+              margin: `0 0 ${theme.spacing.md} 0`,
+              fontSize: '18px',
+              fontWeight: 600,
+              color: theme.colors.dark,
+            }}
+          >
+            Top 10 Setores por Custo de Substituição
+          </h3>
+          <div style={{ width: '100%', height: '500px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={custoPorSetorData}
+                layout="vertical"
+                margin={{ top: 20, right: 100, left: 150, bottom: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke={theme.colors.gray[200]} />
+                <XAxis
+                  type="number"
+                  tickFormatter={(value) => {
+                    if (value >= 1000000) {
+                      return `R$ ${(value / 1000000).toFixed(1)}M`;
+                    }
+                    if (value >= 1000) {
+                      return `R$ ${(value / 1000).toFixed(0)}k`;
+                    }
+                    return `R$ ${value}`;
+                  }}
+                  stroke={theme.colors.gray[600]}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="setor"
+                  width={140}
+                  tick={{ fontSize: 12 }}
+                  stroke={theme.colors.gray[600]}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: theme.colors.white,
+                    border: `1px solid ${theme.colors.gray[200]}`,
+                    borderRadius: theme.borderRadius.md,
+                    boxShadow: theme.shadows.md,
+                  }}
+                  formatter={(value: number) => {
+                    return new Intl.NumberFormat('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                      maximumFractionDigits: 0,
+                    }).format(value);
+                  }}
+                />
+                <Bar
+                  dataKey="valor"
+                  fill={theme.colors.primary}
+                  radius={[0, 4, 4, 0]}
+                >
+                  {custoPorSetorData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={
+                        index === 0
+                          ? theme.colors.danger
+                          : index === 1
+                          ? theme.colors.warning
+                          : index === 2
+                          ? theme.colors.info
+                          : theme.colors.primary
+                      }
+                    />
+                  ))}
+                  <LabelList
+                    dataKey="valor"
+                    position="right"
+                    formatter={(value: number) => {
+                      if (value >= 1000000) {
+                        return `R$ ${(value / 1000000).toFixed(1)}M`;
+                      }
+                      if (value >= 1000) {
+                        return `R$ ${(value / 1000).toFixed(0)}k`;
+                      }
+                      return new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                        maximumFractionDigits: 0,
+                      }).format(value);
+                    }}
+                    style={{
+                      fill: theme.colors.gray[700],
+                      fontSize: '12px',
+                      fontWeight: 500,
+                    }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {/* Gráficos de Pizza - Lado a Lado */}
       {(chartData.length > 0 || idadeChartData.length > 0) && (
         <div
@@ -1727,19 +2020,264 @@ export default function InvPage() {
       )}
 
       {/* Tabela */}
-      <DataTable
-        data={filteredData}
-        columns={columns}
-        selectable={true}
-        selectedRows={selectedRows}
-        onSelectRow={handleSelectRow}
-        onSelectAll={handleSelectAll}
-        getId={(row) => row.Id}
-        sortConfig={sortConfig}
-        onSort={(column, direction) => {
-          setSortConfig({ column, direction });
+      <div
+        style={{
+          backgroundColor: theme.colors.white,
+          borderRadius: theme.borderRadius.md,
+          boxShadow: theme.shadows.sm,
+          overflow: 'hidden',
         }}
-      />
+      >
+        {/* Cabeçalho da Tabela com Filtros e Botão de Minimizar */}
+        <div
+          style={{
+            padding: theme.spacing.md,
+            borderBottom: `1px solid ${theme.colors.gray[200]}`,
+            backgroundColor: theme.colors.gray[50],
+          }}
+        >
+          {/* Linha 1: Título e Botão */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: theme.spacing.sm,
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: '18px',
+                fontWeight: 600,
+                color: theme.colors.dark,
+              }}
+            >
+              Lista de Equipamentos ({filteredData.length})
+            </h3>
+            <button
+              onClick={() => setIsTableMinimized(!isTableMinimized)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: theme.spacing.xs,
+                padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                border: `1px solid ${theme.colors.gray[300]}`,
+                backgroundColor: theme.colors.white,
+                color: theme.colors.gray[700],
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 500,
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = theme.colors.gray[100];
+                e.currentTarget.style.borderColor = theme.colors.gray[400];
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = theme.colors.white;
+                e.currentTarget.style.borderColor = theme.colors.gray[300];
+              }}
+            >
+              {isTableMinimized ? (
+                <>
+                  <FiChevronDown size={16} />
+                  Expandir
+                </>
+              ) : (
+                <>
+                  <FiChevronUp size={16} />
+                  Minimizar
+                </>
+              )}
+            </button>
+          </div>
+          {/* Linha 2: Filtros */}
+          <div
+            style={{
+              display: 'flex',
+              gap: theme.spacing.sm,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
+            {/* Filtro por Tipo de Equipamento */}
+            <div style={{ flex: '1 1 200px', minWidth: '150px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  color: theme.colors.gray[700],
+                  marginBottom: theme.spacing.xs,
+                }}
+              >
+                Tipo de Equipamento
+              </label>
+              <select
+                value={tableFilters.tipo}
+                onChange={(e) => setTableFilters({ ...tableFilters, tipo: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                  border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="">Todos</option>
+                {tiposComContagem.map((item) => (
+                  <option key={item.tipo} value={item.tipo}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {/* Filtro por Setor */}
+            <div style={{ flex: '1 1 200px', minWidth: '150px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  color: theme.colors.gray[700],
+                  marginBottom: theme.spacing.xs,
+                }}
+              >
+                Setor
+              </label>
+              <select
+                value={tableFilters.setor}
+                onChange={(e) => setTableFilters({ ...tableFilters, setor: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                  border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="">Todos</option>
+                {Array.from(new Set(data.map((e) => e.Setor).filter(Boolean))).sort().map((setor) => (
+                  <option key={setor} value={setor}>
+                    {setor}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {/* Filtro por Idade */}
+            <div style={{ flex: '1 1 200px', minWidth: '150px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  color: theme.colors.gray[700],
+                  marginBottom: theme.spacing.xs,
+                }}
+              >
+                Idade
+              </label>
+              <select
+                value={tableFilters.idade}
+                onChange={(e) => setTableFilters({ ...tableFilters, idade: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                  border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.dark,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="">Todas</option>
+                <option value="0-2">0 a 2 anos</option>
+                <option value="2-5">2 a 5 anos</option>
+                <option value="5-10">5 a 10 anos</option>
+                <option value="10+">10+ anos</option>
+                <option value="sem-data">Sem data</option>
+              </select>
+            </div>
+            {/* Botão Limpar Filtros */}
+            {(tableFilters.tipo || tableFilters.setor || tableFilters.idade) && (
+              <div style={{ flex: '0 0 auto', alignSelf: 'flex-end' }}>
+                <button
+                  onClick={() => setTableFilters({ tipo: '', setor: '', idade: '' })}
+                  style={{
+                    padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    backgroundColor: theme.colors.white,
+                    color: theme.colors.gray[700],
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: theme.spacing.xs,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = theme.colors.gray[100];
+                    e.currentTarget.style.borderColor = theme.colors.gray[400];
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = theme.colors.white;
+                    e.currentTarget.style.borderColor = theme.colors.gray[300];
+                  }}
+                >
+                  <FiX size={14} />
+                  Limpar Filtros
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        <div
+          style={{
+            maxHeight: isTableMinimized ? '300px' : 'none',
+            overflowY: isTableMinimized ? 'auto' : 'visible',
+            overflowX: 'auto',
+          }}
+        >
+          {/* Usar VirtualizedDataTable para melhor performance com muitas linhas */}
+          {filteredData.length > 200 ? (
+            <VirtualizedDataTable
+              data={filteredData}
+              columns={columns}
+              selectable={true}
+              selectedRows={selectedRows}
+              onSelectRow={handleSelectRow}
+              onSelectAll={handleSelectAll}
+              getId={(row) => row.Id}
+              sortConfig={sortConfig}
+              onSort={(column, direction) => {
+                setSortConfig({ column, direction });
+              }}
+              estimatedRowHeight={55}
+              maxHeight={isTableMinimized ? '300px' : '600px'}
+            />
+          ) : (
+            <DataTable
+              data={filteredData}
+              columns={columns}
+              selectable={true}
+              selectedRows={selectedRows}
+              onSelectRow={handleSelectRow}
+              onSelectAll={handleSelectAll}
+              getId={(row) => row.Id}
+              sortConfig={sortConfig}
+              onSort={(column, direction) => {
+                setSortConfig({ column, direction });
+              }}
+            />
+          )}
+        </div>
+      </div>
 
       {/* Modal de Detalhes do Equipamento */}
       {selectedEquipment && (
@@ -1914,6 +2452,7 @@ export default function InvPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

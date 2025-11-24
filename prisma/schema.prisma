@@ -84,44 +84,76 @@ model SectorRound {
 }
 
 model PurchaseRequest {
-  id          String   @id @default(cuid())
-  sectorId    Int
-  description String
-  status      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String    @id @default(cuid())
+  numeroSolicitacao String?   @unique // Número da solicitação no sistema externo
+  sectorId          Int
+  sectorName        String? // Cache do nome do setor
+  description       String
+  status            String // 'Pendente' | 'Aprovada' | 'Em Compra' | 'Entregue' | 'Cancelada'
+  dataSolicitacao   DateTime // Data em que a solicitação foi feita
+  dataEntrega       DateTime? // Data em que o item foi entregue
+  observacoes       String?
+  createdBy         String? // ID do usuário que criou
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  serviceOrders ServiceOrder[] // OS vinculadas a esta solicitação
+  investments   PurchaseRequestInvestment[] // Investimentos vinculados a esta solicitação
+
+  @@index([sectorId])
+  @@index([status])
+  @@index([numeroSolicitacao])
+  @@index([dataSolicitacao])
+  @@index([dataEntrega])
+  @@index([createdAt])
+}
+
+// Relacionamento muitos-para-muitos entre PurchaseRequest e Investment
+model PurchaseRequestInvestment {
+  id                String          @id @default(cuid())
+  purchaseRequestId String
+  purchaseRequest   PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  investmentId      String
+  investment        Investment      @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+
+  @@unique([purchaseRequestId, investmentId])
+  @@index([purchaseRequestId])
+  @@index([investmentId])
 }
 
 model User {
-  id            String       @id @default(cuid())
-  email         String       @unique
-  name          String
-  password      String       // Hash bcrypt da senha
-  role          String       // 'admin' | 'comum' | 'gerente'
-  active        Boolean      @default(true)
-  canImpersonate Boolean    @default(false) // Pode personificar outros usuários
-  lastLogin     DateTime?    // Último login
-  loginAttempts Int         @default(0) // Tentativas de login falhadas
-  lockedUntil   DateTime?   // Bloqueado até (para rate limiting)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  
-  sectors       UserSector[]
-  managedUsers  UserManager[] @relation("Manager")
-  managedBy     UserManager[] @relation("ManagedUser")
-  impersonationLogs ImpersonationLog[] @relation("ImpersonatedBy")
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  password       String // Hash bcrypt da senha
+  phone          String? // Número de celular
+  role           String // 'admin' | 'comum' | 'gerente'
+  active         Boolean   @default(true)
+  canImpersonate Boolean   @default(false) // Pode personificar outros usuários
+  lastLogin      DateTime? // Último login
+  loginAttempts  Int       @default(0) // Tentativas de login falhadas
+  lockedUntil    DateTime? // Bloqueado até (para rate limiting)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  sectors            UserSector[]
+  managedUsers       UserManager[]      @relation("Manager")
+  managedBy          UserManager[]      @relation("ManagedUser")
+  impersonationLogs  ImpersonationLog[] @relation("ImpersonatedBy")
   impersonatedByLogs ImpersonationLog[] @relation("ImpersonatedUser")
-  sessions      Session[]    // Sessões ativas
+  sessions           Session[] // Sessões ativas
+  savedFilters       SavedFilter[] // Filtros salvos
 }
 
 model UserSector {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sectorId  Int
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sectorId   Int
   sectorName String? // Cache do nome do setor
-  createdAt DateTime @default(now())
-  
+  createdAt  DateTime @default(now())
+
   @@unique([userId, sectorId])
   @@index([userId])
   @@index([sectorId])
@@ -129,26 +161,26 @@ model UserSector {
 
 model UserManager {
   id        String   @id @default(cuid())
-  managerId String   // ID do gerente
+  managerId String // ID do gerente
   manager   User     @relation("Manager", fields: [managerId], references: [id], onDelete: Cascade)
-  userId    String   // ID do usuário gerenciado
+  userId    String // ID do usuário gerenciado
   user      User     @relation("ManagedUser", fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
-  
+
   @@unique([managerId, userId])
   @@index([managerId])
   @@index([userId])
 }
 
 model ImpersonationLog {
-  id              String   @id @default(cuid())
-  supervisorId    String
-  supervisor      User     @relation("ImpersonatedBy", fields: [supervisorId], references: [id])
+  id                 String    @id @default(cuid())
+  supervisorId       String
+  supervisor         User      @relation("ImpersonatedBy", fields: [supervisorId], references: [id])
   impersonatedUserId String
-  impersonatedUser User    @relation("ImpersonatedUser", fields: [impersonatedUserId], references: [id])
-  startedAt       DateTime @default(now())
-  endedAt         DateTime?
-  reason          String?
+  impersonatedUser   User      @relation("ImpersonatedUser", fields: [impersonatedUserId], references: [id])
+  startedAt          DateTime  @default(now())
+  endedAt            DateTime?
+  reason             String?
 }
 
 model EquipmentKpiMonthly {
@@ -178,9 +210,9 @@ model MaintenanceContract {
   dataFim             DateTime
   renovacaoAutomatica Boolean  @default(false)
   ativo               Boolean  @default(true)
-  descricao           String?  // Descrição detalhada do contrato
-  arquivoUrl          String?  // URL do arquivo do contrato (upload)
-  arquivoNome         String?  // Nome original do arquivo
+  descricao           String? // Descrição detalhada do contrato
+  arquivoUrl          String? // URL do arquivo do contrato (upload)
+  arquivoNome         String? // Nome original do arquivo
   observacoes         String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -190,28 +222,37 @@ model MaintenanceContract {
 }
 
 model Investment {
-  id            String       @id @default(cuid())
-  titulo        String
-  descricao     String?
-  categoria     String
-  valorEstimado Decimal
-  prioridade    String
-  status        String
-  setor         String?
-  sectorId      Int?
-  responsavel   String?
-  dataPrevista  DateTime?
-  observacoes   String?
-  sectorRoundId String?
-  sectorRound   SectorRound? @relation("InvestmentSectorRound", fields: [sectorRoundId], references: [id])
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id              String       @id @default(cuid())
+  titulo          String
+  descricao       String?
+  categoria       String
+  valorEstimado   Decimal
+  prioridade      String
+  status          String
+  setor           String?
+  sectorId        Int?
+  responsavel     String?
+  dataPrevista    DateTime?
+  observacoes     String?
+  sectorRoundId   String?
+  sectorRound     SectorRound? @relation("InvestmentSectorRound", fields: [sectorRoundId], references: [id])
+  // Campos para controle de compra (quando autorizado) - DEPRECATED: usar PurchaseRequest
+  ordemCompra     String? // Número da ordem de compra (DEPRECATED - manter para compatibilidade)
+  dataSolicitacao DateTime? // Data da solicitação (DEPRECATED - manter para compatibilidade)
+  dataChegada     DateTime? // Data que o item chegou (DEPRECATED - manter para compatibilidade)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  purchaseRequestInvestments PurchaseRequestInvestment[] // Solicitações de compra vinculadas
 
   @@index([status])
   @@index([categoria])
   @@index([sectorRoundId])
   @@index([sectorId])
   @@index([createdAt])
+  @@index([ordemCompra])
+  @@index([dataSolicitacao])
+  @@index([dataChegada])
 }
 
 model Alert {
@@ -237,29 +278,45 @@ model Alert {
 }
 
 model SystemConfig {
-  id          String   @id @default(cuid())
-  category    String   // 'maintenance_type' | 'os_status' | etc.
-  key         String   // Nome do tipo/status (ex: 'Corretiva', 'Preventiva')
-  value       String   // Valor da configuração (ex: 'corretiva', 'preventiva')
-  metadata    String?  // JSON com informações adicionais
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  category  String // 'maintenance_type' | 'os_status' | etc.
+  key       String // Nome do tipo/status (ex: 'Corretiva', 'Preventiva')
+  value     String // Valor da configuração (ex: 'corretiva', 'preventiva')
+  metadata  String? // JSON com informações adicionais
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([category, key])
   @@index([category])
   @@index([active])
 }
 
-model Session {
+// Permissões de acesso por role (tipo de usuário)
+model RolePermission {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token     String   @unique // JWT token
-  ipAddress String?
-  userAgent String?
-  expiresAt DateTime
+  role      String // 'admin' | 'comum' | 'gerente'
+  page      String // Nome da página (ex: 'dashboard', 'inventario', 'os', etc.)
+  canAccess Boolean  @default(true) // Se o role pode acessar esta página
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String? // ID do usuário que criou
+  updatedBy String? // ID do usuário que atualizou
+
+  @@unique([role, page])
+  @@index([role])
+  @@index([page])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique // JWT token
+  ipAddress  String?
+  userAgent  String?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
   lastUsedAt DateTime @default(now())
 
   @@index([userId])
@@ -268,20 +325,103 @@ model Session {
 }
 
 model SectorMapping {
-  id                String   @id @default(cuid())
-  effortSectorName  String   // Nome do setor como vem da API do Effort
-  effortSectorId    Int?     // ID do setor da API do Effort (se disponível)
-  systemSectorId    Int      // ID do setor no sistema (mapeado para UserSector)
-  systemSectorName  String?  // Nome do setor no sistema (cache)
-  source            String   // 'equipamentos' | 'os' | 'both'
-  active            Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  createdBy         String?  // ID do usuário que criou o mapeamento
+  id               String   @id @default(cuid())
+  effortSectorName String // Nome do setor como vem da API do Effort
+  effortSectorId   Int? // ID do setor da API do Effort (se disponível)
+  systemSectorId   Int // ID do setor no sistema (mapeado para UserSector)
+  systemSectorName String? // Nome do setor no sistema (cache)
+  source           String // 'equipamentos' | 'os' | 'both'
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String? // ID do usuário que criou o mapeamento
 
   @@unique([effortSectorName, effortSectorId, systemSectorId])
   @@index([effortSectorName])
   @@index([effortSectorId])
   @@index([systemSectorId])
   @@index([active])
+}
+
+model SavedFilter {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  page       String // 'os' | 'inventario' | 'investimentos' | 'alertas' | etc.
+  name       String // Nome do filtro salvo
+  filters    String // JSON com os filtros
+  isPublic   Boolean  @default(false) // Se pode ser compartilhado
+  shareToken String?  @unique // Token para compartilhamento via URL
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([page])
+  @@index([shareToken])
+}
+
+model ServiceOrder {
+  id                String           @id @default(cuid())
+  codigoSerialOS    Int              @unique // Código serial da OS (identificador único da API Effort)
+  osCodigo          String? // Código da OS (ex: "201800662")
+  comentarios       String? // Comentários sobre a OS
+  purchaseRequestId String? // ID da solicitação de compra vinculada
+  purchaseRequest   PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id], onDelete: SetNull)
+  createdBy         String? // ID do usuário que criou/atualizou
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([codigoSerialOS])
+  @@index([purchaseRequestId])
+  @@index([osCodigo])
+}
+
+// Módulo MEL (Minimum Equipment List) - Refatorado para usar equipamentos reais agrupados
+// MEL (Minimum Equipment List) por setor
+model SectorMel {
+  id                 String   @id @default(cuid())
+  sectorId           Int // ID do setor (mapeado via SectorMapping)
+  sectorName         String? // Cache do nome do setor
+  equipmentGroupKey  String // Chave do grupo (ex: "monitor", "ventilador", "desfibrilador")
+  equipmentGroupName String // Nome legível do grupo (ex: "Monitor Multiparâmetro")
+  groupPattern       String? // Padrão usado para identificar o grupo (ex: "*monitor*", "*ventilador*")
+  minimumQuantity    Int // Quantidade mínima necessária
+  active             Boolean  @default(true) // Se a regra está ativa
+  justificativa      String? // Justificativa/motivo da regra
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  createdBy          String? // ID do usuário que criou
+  updatedBy          String? // ID do usuário que atualizou por último
+
+  melAlerts MelAlert[]
+
+  @@unique([sectorId, equipmentGroupKey])
+  @@index([sectorId])
+  @@index([equipmentGroupKey])
+  @@index([active])
+}
+
+// Alertas de MEL (quando disponível < mínimo)
+model MelAlert {
+  id                 String     @id @default(cuid())
+  sectorId           Int
+  sectorName         String? // Cache do nome do setor
+  equipmentGroupKey  String // Chave do grupo (ex: "monitor", "ventilador")
+  equipmentGroupName String // Nome legível do grupo
+  sectorMelId        String?
+  sectorMel          SectorMel? @relation(fields: [sectorMelId], references: [id], onDelete: SetNull)
+  currentAvailable   Int // Quantidade disponível no momento do alerta
+  minimumQuantity    Int // Quantidade mínima configurada
+  totalInSector      Int // Total de equipamentos no setor
+  unavailableCount   Int // Quantidade indisponível (com OS aberta)
+  status             String     @default("ativo") // "ativo" | "resolvido"
+  resolvedAt         DateTime?
+  resolvedBy         String? // ID do usuário que resolveu
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([sectorId])
+  @@index([equipmentGroupKey])
+  @@index([status])
+  @@index([createdAt])
 }

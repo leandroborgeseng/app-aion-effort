@@ -14,6 +14,8 @@ export const dataSource = {
     USE_MOCK ? readFixture('equipamentos.json') : sdk.getEquipamentos(p),
   osResumida: (p: any) =>
     USE_MOCK ? readFixture('os_resumida.json') : sdk.getOSResumida(p),
+  osAnalitica: (p: any) =>
+    USE_MOCK ? readFixture('os_resumida.json') : sdk.getOSAnalitica(p), // Usar mesmo mock temporariamente, depois criar mock específico
   dispMes: (p: any) =>
     USE_MOCK ? readFixture('disp_mes_a_mes.json') : sdk.getDisponibilidadeMesAMes(p),
   tipos: (p: any) =>

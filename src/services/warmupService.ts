@@ -107,11 +107,6 @@ async function performWarmup(): Promise<void> {
       enabled: true,
     },
     {
-      name: 'Disponibilidade Mês a Mês',
-      fn: () => warmupRoute('/api/ecm/lifecycle/mes-a-mes?periodo=MesCorrente', 'Disponibilidade Mês a Mês'),
-      enabled: true,
-    },
-    {
       name: 'Cronograma',
       fn: async () => {
         const year = new Date().getFullYear();

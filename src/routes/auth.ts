@@ -26,8 +26,15 @@ auth.post(
   ],
   async (req: Request, res: Response) => {
     try {
+      console.log('[auth:login] 📥 Requisição de login recebida:', {
+        email: req.body.email,
+        ip: req.ip || req.socket.remoteAddress,
+        timestamp: new Date().toISOString(),
+      });
+
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.log('[auth:login] ❌ Erros de validação:', errors.array());
         return res.status(400).json({ error: true, message: 'Dados inválidos', errors: errors.array() });
       }
 
@@ -37,6 +44,7 @@ auth.post(
 
       const prisma = await getPrisma();
       if (!prisma) {
+        console.error('[auth:login] ❌ Prisma não disponível');
         return res.status(500).json({ error: true, message: 'Sistema temporariamente indisponível' });
       }
 
@@ -45,14 +53,24 @@ auth.post(
         where: { email: email.toLowerCase() },
       });
 
+      console.log('[auth:login] 👤 Usuário encontrado:', {
+        exists: !!user,
+        email: email.toLowerCase(),
+        active: user?.active,
+        lockedUntil: user?.lockedUntil,
+        loginAttempts: user?.loginAttempts,
+      });
+
       if (!user) {
         // Não revelar se o usuário existe ou não (segurança)
+        console.log('[auth:login] ❌ Usuário não encontrado');
         return res.status(401).json({ error: true, message: 'Email ou senha incorretos' });
       }
 
       // Verificar se usuário está bloqueado
       if (user.lockedUntil && user.lockedUntil > new Date()) {
         const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
+        console.log('[auth:login] 🔒 Usuário bloqueado:', { minutesLeft, lockedUntil: user.lockedUntil });
         return res.status(423).json({
           error: true,
           message: `Conta bloqueada. Tente novamente em ${minutesLeft} minuto(s)`,
@@ -60,12 +78,20 @@ auth.post(
       }
 
       // Verificar senha
+      console.log('[auth:login] 🔐 Verificando senha...');
       const passwordMatch = await bcrypt.compare(password, user.password);
+      console.log('[auth:login] 🔐 Senha válida:', passwordMatch);
       
       if (!passwordMatch) {
         // Incrementar tentativas de login
         const newAttempts = user.loginAttempts + 1;
         const shouldLock = newAttempts >= MAX_LOGIN_ATTEMPTS;
+
+        console.log('[auth:login] ❌ Senha incorreta:', {
+          attempts: newAttempts,
+          maxAttempts: MAX_LOGIN_ATTEMPTS,
+          willLock: shouldLock,
+        });
 
         await prisma.user.update({
           where: { id: user.id },
@@ -80,10 +106,12 @@ auth.post(
 
       // Verificar se usuário está ativo
       if (!user.active) {
+        console.log('[auth:login] ❌ Usuário inativo');
         return res.status(403).json({ error: true, message: 'Usuário inativo' });
       }
 
       // Resetar tentativas de login
+      console.log('[auth:login] ✅ Login válido, resetando tentativas...');
       await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -94,11 +122,13 @@ auth.post(
       });
 
       // Gerar token JWT
+      console.log('[auth:login] 🎫 Gerando token JWT...');
       const token = jwt.sign(
         { userId: user.id, email: user.email, role: user.role },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );
+      console.log('[auth:login] 🎫 Token gerado com sucesso');
 
       // Calcular expiração
       const expiresAt = new Date();
@@ -129,7 +159,7 @@ auth.post(
         },
       });
 
-      res.json({
+      const responseData = {
         success: true,
         token,
         user: {
@@ -139,9 +169,18 @@ auth.post(
           role: user.role,
         },
         expiresAt: expiresAt.toISOString(),
+      };
+
+      console.log('[auth:login] ✅ Login bem-sucedido:', {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        hasToken: !!token,
       });
+
+      res.json(responseData);
     } catch (error: any) {
-      console.error('[auth:login] Erro:', error);
+      console.error('[auth:login] ❌ Erro:', error);
       console.error('[auth:login] Stack:', error?.stack);
       res.status(500).json({ 
         error: true, 
@@ -192,6 +231,7 @@ auth.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => {
         id: true,
         email: true,
         name: true,
+        phone: true,
         role: true,
         active: true,
         canImpersonate: true,

@@ -3,19 +3,11 @@ import { Router } from 'express';
 import { dataSource } from '../adapters/dataSource';
 import { getEquipmentCosts } from '../services/equipmentCostService';
 import { getCache, setCache, generateCacheKey } from '../services/cacheService';
+import { getPrisma } from '../services/prismaService';
 import * as fs from 'node:fs/promises';
 
 const USE_MOCK = process.env.USE_MOCK === 'true';
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutos
-
-let prisma: any = null;
-async function getPrisma() {
-  if (!prisma && !USE_MOCK) {
-    const { PrismaClient } = await import('@prisma/client');
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
 
 export const lifecycle = Router();
 
@@ -81,13 +73,17 @@ lifecycle.get('/cronograma', async (req, res) => {
     }
     
     // Se não estiver em cache, buscar da API
+    console.log('[cronograma] Buscando da API - setoresFilter:', setoresFilter, 'isAdmin:', !setoresFilter);
     data = await dataSource.cronograma({
       dataInicio,
       dataFim,
       listaEmpresaId: empresasId,
     });
     
+    console.log('[cronograma] Dados retornados da API:', Array.isArray(data) ? data.length : 'não é array', typeof data);
+    
     // Filtrar por setores se fornecido (usando nomes de setores diretamente da API)
+    // Se não há filtro de setores (admin), retornar todos os dados
     if (setoresFilter && setoresFilter.length > 0 && Array.isArray(data)) {
       // Buscar nomes dos setores do sistema para fazer o filtro
       const { dataSource } = await import('../adapters/dataSource');
@@ -224,66 +220,118 @@ lifecycle.get('/inventario', async (req, res) => {
       }
     }
 
-    // Função auxiliar para obter SetorId do equipamento (pode não existir)
-    const getEquipamentoSectorId = (eq: any): number | null => {
-      // Se tem SetorId direto, usar
-      if (eq.SetorId) {
-        return eq.SetorId;
-      }
-      
-      // Se não tem SetorId mas tem Setor (nome), gerar ID consistente
-      if (eq.Setor) {
-        // Mapeamento fixo de nomes para IDs (mesmo usado em users.ts)
-        const sectorNameToIdMap: Record<string, number> = {
-          'UTI 1': 1,
-          'UTI 2': 2,
-          'UTI 3': 3,
-          'Emergência': 4,
-          'Centro Cirúrgico': 5,
-          'Radiologia': 6,
-          'Cardiologia': 7,
-          'Neurologia': 8,
-          'Ortopedia': 9,
-          'Pediatria': 10,
-          'Maternidade': 11,
-          'Ambulatório': 12,
-        };
-        
-        if (sectorNameToIdMap[eq.Setor]) {
-          return sectorNameToIdMap[eq.Setor];
-        }
-        
-        // Gerar hash consistente se não estiver no mapeamento
-        let hash = 0;
-        for (let i = 0; i < eq.Setor.length; i++) {
-          const char = eq.Setor.charCodeAt(i);
-          hash = ((hash << 5) - hash) + char;
-          hash = hash & hash;
-        }
-        return Math.abs(hash % 999) + 1;
-      }
-      
-      return null;
+    // Função auxiliar para normalizar string (remove acentos, espaços extras)
+    const normalizarString = (str: string): string => {
+      return str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/\s+/g, ' ') // Normaliza espaços
+        .trim();
     };
 
     // Filtrar por setores se fornecido (antes de enriquecer com custos)
     let equipamentosFiltrados = equipamentos;
     if (setoresFilter && setoresFilter.length > 0) {
+      // Buscar nomes dos setores usando SectorMapping do banco
+      let sectorNamesToMatch: string[] = [];
+      try {
+        const prismaClient = await getPrisma();
+        if (prismaClient) {
+          const sectorMappings = await prismaClient.sectorMapping.findMany({
+            where: {
+              systemSectorId: { in: setoresFilter },
+              active: true,
+            },
+          });
+          
+          // Criar lista com todos os nomes de setores (effortSectorName prioritário)
+          sectorMappings.forEach((mapping) => {
+            if (mapping.effortSectorName) {
+              sectorNamesToMatch.push(mapping.effortSectorName);
+            }
+            if (mapping.systemSectorName && mapping.systemSectorName !== mapping.effortSectorName) {
+              sectorNamesToMatch.push(mapping.systemSectorName);
+            }
+          });
+          
+          console.log('[inventario] Setores mapeados encontrados no banco:', sectorNamesToMatch);
+        }
+        
+        // Se não encontrou mapeamento no banco, buscar nomes dos setores da API de investimentos
+        if (sectorNamesToMatch.length === 0) {
+          try {
+            const sectorsRes = await fetch(`${req.protocol}://${req.get('host')}/api/ecm/investments/sectors/list`);
+            if (sectorsRes.ok) {
+              const sectorsData = await sectorsRes.json();
+              const sectorsFromApi = sectorsData.sectors
+                ?.filter((s: any) => setoresFilter.includes(s.id))
+                .map((s: any) => s.name) || [];
+              
+              sectorNamesToMatch = sectorsFromApi;
+              console.log('[inventario] Setores encontrados na API de investimentos:', sectorNamesToMatch);
+            }
+          } catch (apiError: any) {
+            console.warn('[inventario] Erro ao buscar setores da API:', apiError?.message);
+          }
+        }
+      } catch (error: any) {
+        console.warn('[inventario] Erro ao buscar mapeamento de setores:', error?.message);
+      }
+      
+      // Usar utilitário getSectorIdFromItem como fallback
+      const { getSectorIdFromItem } = await import('../utils/sectorMapping');
+      
       equipamentosFiltrados = equipamentos.filter((eq: any) => {
-        const sectorId = getEquipamentoSectorId(eq);
+        const eqSetor = eq.Setor || '';
+        
+        // Se temos mapeamento do banco, usar comparação flexível por nome do setor
+        if (sectorNamesToMatch.length > 0) {
+          const eqSetorNormalizado = normalizarString(eqSetor);
+          for (const sectorName of sectorNamesToMatch) {
+            const sectorNameNormalizado = normalizarString(sectorName);
+            
+            // Comparação exata
+            if (eqSetorNormalizado === sectorNameNormalizado) {
+              return true;
+            }
+            
+            // Verificar se o nome do setor está contido no setor do equipamento
+            if (eqSetorNormalizado.includes(sectorNameNormalizado) || sectorNameNormalizado.includes(eqSetorNormalizado)) {
+              return true;
+            }
+            
+            // Verificar palavras principais (para nomes compostos)
+            const palavrasSetor = sectorNameNormalizado.split(/\s+/).filter(w => w.length >= 3);
+            if (palavrasSetor.length >= 2) {
+              const palavrasCoincidentes = palavrasSetor.filter(palavra => eqSetorNormalizado.includes(palavra));
+              if (palavrasCoincidentes.length >= 2) {
+                return true;
+              }
+            }
+          }
+        }
+        
+        // Fallback: usar SetorId do equipamento ou converter nome para ID
+        const sectorId = getSectorIdFromItem(eq);
         if (!sectorId) return false;
         return setoresFilter.includes(sectorId);
       });
-      console.log('[inventario] Filtro de setores:', setoresFilter);
+      
+      console.log('[inventario] Filtro de setores (IDs):', setoresFilter);
+      console.log('[inventario] Nomes de setores para filtrar:', sectorNamesToMatch);
       console.log('[inventario] Equipamentos antes do filtro:', equipamentos.length);
       console.log('[inventario] Equipamentos após filtro de setores:', equipamentosFiltrados.length);
       
-      // Debug: mostrar alguns exemplos
-      if (equipamentosFiltrados.length > 0) {
+      // Debug: mostrar alguns exemplos de setores encontrados nos equipamentos
+      if (equipamentosFiltrados.length === 0 && equipamentos.length > 0) {
+        const setoresEncontrados = new Set(equipamentos.slice(0, 50).map((eq: any) => eq.Setor || '').filter((s: string) => s));
+        console.log('[inventario] Exemplos de setores encontrados nos equipamentos (primeiros 50):', Array.from(setoresEncontrados).slice(0, 10));
+      } else if (equipamentosFiltrados.length > 0) {
         console.log('[inventario] Exemplo de equipamento filtrado:', {
           Id: equipamentosFiltrados[0].Id,
           Setor: equipamentosFiltrados[0].Setor,
-          SetorId: equipamentosFiltrados[0].SetorId || getEquipamentoSectorId(equipamentosFiltrados[0]),
+          SetorId: equipamentosFiltrados[0].SetorId || getSectorIdFromItem(equipamentosFiltrados[0]),
         });
       }
     }

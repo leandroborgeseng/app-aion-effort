@@ -33,14 +33,45 @@ export default function InvestmentsList({ data, isLoading, allowedSectors, isAdm
     if (isAdmin) return data;
     
     // Se não há setores permitidos, não mostrar nada
-    if (!allowedSectors || allowedSectors.length === 0) return [];
+    if (!allowedSectors || allowedSectors.length === 0) {
+      console.log('[InvestmentsList] Sem setores permitidos, retornando array vazio');
+      return [];
+    }
     
-    return data.filter((inv) => {
-      // Se o investimento não tem sectorId, não mostrar para usuários não-admin
-      if (!inv.sectorId) return false;
-      // Verificar se o sectorId está na lista de setores permitidos
-      return allowedSectors.includes(inv.sectorId);
+    // Função auxiliar para normalizar string
+    const normalizarString = (str: string): string => {
+      if (!str) return '';
+      return str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+    
+    const filtered = data.filter((inv) => {
+      // Se o investimento tem sectorId e está na lista de setores permitidos, incluir
+      if (inv.sectorId && allowedSectors.includes(inv.sectorId)) {
+        return true;
+      }
+      
+      // Se não tem sectorId mas tem setor (nome), tentar comparar por nome
+      // Isso é um fallback caso o sectorId não esteja preenchido
+      if (!inv.sectorId && inv.setor) {
+        // Por enquanto, não incluir investimentos sem sectorId para não-admin
+        // para garantir que apenas investimentos com setor correto sejam mostrados
+        return false;
+      }
+      
+      // Se não tem nem sectorId nem setor, não mostrar para não-admin
+      return false;
     });
+    
+    console.log('[InvestmentsList] Investimentos filtrados:', filtered.length, 'de', data.length, 'total');
+    console.log('[InvestmentsList] Setores permitidos:', allowedSectors);
+    console.log('[InvestmentsList] Setores dos investimentos:', data.map((inv) => ({ id: inv.sectorId, nome: inv.setor })));
+    
+    return filtered;
   }, [data, allowedSectors, isAdmin]);
 
   // Função auxiliar para converter valor para número

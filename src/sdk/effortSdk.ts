@@ -49,6 +49,8 @@ export async function getOSResumida(params: {
     | 'AnoAnterior'
     | 'DoisAnosAtuais'
     | 'DoisAnosCorrente';
+  dataInicio?: string; // Data de início no formato YYYY-MM-DD (opcional)
+  dataFim?: string; // Data de fim no formato YYYY-MM-DD (opcional)
   listaEmpresaId?: number[];
   tiposManutencoes?: number[];
   situacaoOs?: number[];
@@ -63,10 +65,47 @@ export async function getOSResumida(params: {
     ...toMulti('situacaoOs', situacaoOs),
     ...toMulti('oficinas', oficinas),
   };
-  const { data } = await effort.get<ListagemAnaliticaOsResumidaDTO[]>(
+  
+  console.log('[getOSResumida] 📡 Fazendo requisição para API:', {
+    endpoint: '/api/pbi/v1/listagem_analitica_das_os_resumida',
+    params: { ...rest, ...multi },
+  });
+  
+  const response = await effort.get<any>(
     '/api/pbi/v1/listagem_analitica_das_os_resumida',
     { params: { ...rest, ...multi } }
   );
+  
+  const data = response.data;
+  
+  // Log detalhado da resposta
+  console.log('[getOSResumida] 📥 Resposta recebida:', {
+    tipo: typeof data,
+    isArray: Array.isArray(data),
+    keys: data && typeof data === 'object' ? Object.keys(data) : 'N/A',
+    temItens: !!(data && typeof data === 'object' && (data as any).Itens),
+    temData: !!(data && typeof data === 'object' && (data as any).data),
+    temItems: !!(data && typeof data === 'object' && (data as any).items),
+    primeiroItem: Array.isArray(data) && data.length > 0 ? data[0] : 
+                  (data && typeof data === 'object' && (data as any).Itens && (data as any).Itens.length > 0) ? (data as any).Itens[0] : null,
+  });
+  
+  // Se a resposta tem estrutura { TotalItens, Itens[], ... }, logar estrutura
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    console.log('[getOSResumida] 📊 Estrutura da resposta:', {
+      TotalItens: (data as any).TotalItens,
+      QuantidadePaginas: (data as any).QuantidadePaginas,
+      Pagina: (data as any).Pagina,
+      UltimaPagina: (data as any).UltimaPagina,
+      ItensLength: Array.isArray((data as any).Itens) ? (data as any).Itens.length : 0,
+    });
+    
+    // Logar primeira OS completa se existir
+    if ((data as any).Itens && Array.isArray((data as any).Itens) && (data as any).Itens.length > 0) {
+      console.log('[getOSResumida] 📋 Primeira OS completa:', JSON.stringify((data as any).Itens[0], null, 2));
+    }
+  }
+  
   return data;
 }
 
@@ -86,6 +125,8 @@ export async function getOSAnalitica(params: {
     | 'AnoAnterior'
     | 'DoisAnosAtuais'
     | 'DoisAnosCorrente';
+  dataInicio?: string; // Data de início no formato YYYY-MM-DD (opcional)
+  dataFim?: string; // Data de fim no formato YYYY-MM-DD (opcional)
   listaEmpresaId?: number[];
   tiposManutencoes?: number[];
   situacaoOs?: number[];

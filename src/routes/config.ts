@@ -2,16 +2,10 @@
 import { Router } from 'express';
 import * as fs from 'node:fs/promises';
 
-const USE_MOCK = process.env.USE_MOCK === 'true';
+import { getPrisma } from '../services/prismaService';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
 
-let prisma: any = null;
-async function getPrisma() {
-  if (!prisma && !USE_MOCK) {
-    const { PrismaClient } = await import('@prisma/client');
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
+const USE_MOCK = process.env.USE_MOCK === 'true';
 
 export const config = Router();
 
@@ -572,6 +566,47 @@ config.get('/workshops/all', async (req, res) => {
   }
 });
 
+// GET /api/config/workshops/enabled - Listar apenas oficinas ativas e habilitadas (para filtros)
+config.get('/workshops/enabled', async (req, res) => {
+  try {
+    if (USE_MOCK) {
+      return res.json([]);
+    }
+
+    const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+    }
+
+    // Buscar apenas oficinas ativas e habilitadas (value="enabled" e active=true)
+    const configs = await prismaClient.systemConfig.findMany({
+      where: {
+        category: 'workshop',
+        active: true,
+      },
+    });
+
+    // Filtrar apenas as que têm value="enabled"
+    const oficinasHabilitadas = configs
+      .filter(config => {
+        const value = (config.value || '').trim().toLowerCase();
+        return value === 'enabled';
+      })
+      .map(config => ({
+        id: config.id,
+        key: config.key,
+        value: config.value,
+        active: config.active,
+      }))
+      .sort((a, b) => a.key.localeCompare(b.key));
+
+    res.json(oficinasHabilitadas);
+  } catch (e: any) {
+    console.error('[config:workshops/enabled] Erro:', e);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao buscar oficinas habilitadas' });
+  }
+});
+
 // POST /api/config/workshops - Criar ou atualizar configuração de oficina
 config.post('/workshops', async (req, res) => {
   try {
@@ -626,6 +661,189 @@ config.post('/workshops', async (req, res) => {
   } catch (e: any) {
     console.error('[config:workshops] Erro:', e);
     res.status(500).json({ error: true, message: e?.message || 'Erro ao salvar configuração' });
+  }
+});
+
+// ========== PERMISSÕES POR ROLE ==========
+
+// GET /api/config/role-permissions - Listar todas as permissões por role
+config.get('/role-permissions', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return res.status(500).json({ error: true, message: 'Sistema temporariamente indisponível' });
+    }
+
+    // Verificar se é admin
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: true, message: 'Apenas administradores podem acessar esta configuração' });
+    }
+
+    const permissions = await prismaClient.rolePermission.findMany({
+      orderBy: [
+        { role: 'asc' },
+        { page: 'asc' },
+      ],
+    });
+
+    // Organizar por role
+    const permissionsByRole: Record<string, Array<{ page: string; canAccess: boolean; id: string }>> = {};
+    permissions.forEach((perm) => {
+      if (!permissionsByRole[perm.role]) {
+        permissionsByRole[perm.role] = [];
+      }
+      permissionsByRole[perm.role].push({
+        page: perm.page,
+        canAccess: perm.canAccess,
+        id: perm.id,
+      });
+    });
+
+    res.json({
+      success: true,
+      permissions: permissionsByRole,
+      allPermissions: permissions,
+    });
+  } catch (e: any) {
+    console.error('[config:role-permissions] Erro:', e);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao buscar permissões' });
+  }
+});
+
+// PUT /api/config/role-permissions - Atualizar permissões de um role
+config.put('/role-permissions/:role', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return res.status(500).json({ error: true, message: 'Sistema temporariamente indisponível' });
+    }
+
+    // Verificar se é admin
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: true, message: 'Apenas administradores podem modificar permissões' });
+    }
+
+    const { role } = req.params;
+    const { permissions } = req.body; // Array de { page: string, canAccess: boolean }
+
+    if (!permissions || !Array.isArray(permissions)) {
+      return res.status(400).json({ error: true, message: 'Formato inválido. Envie um array de permissões.' });
+    }
+
+    // Validar role
+    const validRoles = ['admin', 'comum', 'gerente'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: true, message: `Role inválido. Use: ${validRoles.join(', ')}` });
+    }
+
+    // Atualizar ou criar cada permissão
+    const results = await Promise.all(
+      permissions.map(async ({ page, canAccess }: { page: string; canAccess: boolean }) => {
+        return prismaClient.rolePermission.upsert({
+          where: {
+            role_page: {
+              role,
+              page,
+            },
+          },
+          update: {
+            canAccess,
+            updatedBy: req.userId || null,
+            updatedAt: new Date(),
+          },
+          create: {
+            role,
+            page,
+            canAccess,
+            createdBy: req.userId || null,
+            updatedBy: req.userId || null,
+          },
+        });
+      })
+    );
+
+    res.json({
+      success: true,
+      message: `Permissões do role "${role}" atualizadas com sucesso`,
+      updated: results.length,
+      permissions: results,
+    });
+  } catch (e: any) {
+    console.error('[config:role-permissions:PUT] Erro:', e);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao atualizar permissões' });
+  }
+});
+
+// GET /api/config/role-permissions/pages - Listar todas as páginas disponíveis
+config.get('/role-permissions/pages', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    // Verificar se é admin
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: true, message: 'Apenas administradores podem acessar esta informação' });
+    }
+
+    // Lista de todas as páginas do sistema
+    const pages = [
+      { key: 'dashboard', label: 'Dashboard', description: 'Página principal com visão geral' },
+      { key: 'inventario', label: 'Inventário', description: 'Lista de equipamentos' },
+      { key: 'os', label: 'Ordens de Serviço', description: 'Gestão de ordens de serviço' },
+      { key: 'cronograma', label: 'Cronograma', description: 'Cronograma de manutenções' },
+      { key: 'rondas', label: 'Rondas', description: 'Rondas semanais' },
+      { key: 'investimentos', label: 'Investimentos', description: 'Gestão de investimentos' },
+      { key: 'contratos', label: 'Contratos', description: 'Contratos de manutenção' },
+      { key: 'mel', label: 'MEL', description: 'Minimum Equipment List' },
+      { key: 'indicadores', label: 'Indicadores', description: 'Indicadores de engenharia clínica' },
+      { key: 'criticos', label: 'Críticos', description: 'Equipamentos críticos' },
+      { key: 'configuracoes', label: 'Configurações', description: 'Configurações do sistema' },
+    ];
+
+    res.json({
+      success: true,
+      pages,
+    });
+  } catch (e: any) {
+    console.error('[config:role-permissions:pages] Erro:', e);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao buscar páginas' });
+  }
+});
+
+// GET /api/config/role-permissions/check - Verificar se um role tem acesso a uma página
+config.get('/role-permissions/check', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { role, page } = req.query;
+
+    if (!role || !page) {
+      return res.status(400).json({ error: true, message: 'Parâmetros role e page são obrigatórios' });
+    }
+
+    // Admin sempre tem acesso
+    if (role === 'admin') {
+      return res.json({ canAccess: true });
+    }
+
+    const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      // Se não conseguir verificar, assume acesso (comportamento padrão)
+      return res.json({ canAccess: true });
+    }
+
+    const permission = await prismaClient.rolePermission.findUnique({
+      where: {
+        role_page: {
+          role: role as string,
+          page: page as string,
+        },
+      },
+    });
+
+    // Se não existe permissão configurada, assume acesso (comportamento padrão)
+    const canAccess = permission ? permission.canAccess : true;
+
+    res.json({ canAccess });
+  } catch (e: any) {
+    console.error('[config:role-permissions:check] Erro:', e);
+    // Em caso de erro, assume acesso (comportamento padrão)
+    res.json({ canAccess: true });
   }
 });
 

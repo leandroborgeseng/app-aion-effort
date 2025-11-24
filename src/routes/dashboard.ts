@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { dataSource } from '../adapters/dataSource';
 import { getCache, setCache, generateCacheKey } from '../services/cacheService';
-import { getSectorIdFromItem, getSectorNamesFromIds } from '../utils/sectorMapping';
+import { getSectorIdFromItem, getSectorNamesFromIds, getSectorNamesFromUserSector } from '../utils/sectorMapping';
 import { filterOSByWorkshop } from '../services/workshopFilterService';
 
 const USE_MOCK = process.env.USE_MOCK === 'true';
@@ -396,7 +396,7 @@ export async function isOSCorretiva(os: any): Promise<boolean> {
  * - Situação deve ser "Aberta" (não pode ser "Cancelada", "Fechada", etc)
  * - Tipo de manutenção deve ser EXPLICITAMENTE classificado como "Corretiva" nas configurações
  */
-async function isOSInMaintenance(os: any): Promise<boolean> {
+export async function isOSInMaintenance(os: any): Promise<boolean> {
   // Verificar situação - excluir canceladas e outras situações fechadas
   const situacao = (os.SituacaoDaOS || os.Situacao || '').toString().trim().toLowerCase();
   const situacoesExcluidas = ['cancelada', 'cancelado', 'fechada', 'fechado', 'concluída', 'concluida', 'encerrada', 'encerrado'];
@@ -420,7 +420,7 @@ async function isOSInMaintenance(os: any): Promise<boolean> {
  * - Situação deve ser "Aberta" (não pode ser "Cancelada", "Fechada", etc)
  * - Tipo de manutenção deve ser EXPLICITAMENTE classificado como "Corretiva" nas configurações
  */
-async function isOSInMaintenanceList(os: any): Promise<boolean> {
+export async function isOSInMaintenanceList(os: any): Promise<boolean> {
   // Verificar situação - excluir canceladas e outras situações fechadas
   const situacao = (os.SituacaoDaOS || os.Situacao || '').toString().trim().toLowerCase();
   const situacoesExcluidas = ['cancelada', 'cancelado', 'fechada', 'fechado', 'concluída', 'concluida', 'encerrada', 'encerrado'];
@@ -460,21 +460,135 @@ dashboard.get('/availability', async (req, res) => {
     // }
 
     // Buscar equipamentos
-    const equipamentos = await dataSource.equipamentos({
+    const equipamentosRaw = await dataSource.equipamentos({
       apenasAtivos: true,
       incluirComponentes: false,
       incluirCustoSubstituicao: false,
     });
+    
+    // Garantir que equipamentos é um array (mesma lógica do inventário)
+    const equipamentos = Array.isArray(equipamentosRaw) 
+      ? equipamentosRaw 
+      : (equipamentosRaw as any)?.Itens || (equipamentosRaw as any)?.data || (equipamentosRaw as any)?.items || [];
+    
+    console.log('[dashboard:availability] Equipamentos carregados:', equipamentos.length);
+    console.log('[dashboard:availability] Tipo de equipamentos:', Array.isArray(equipamentos) ? 'array' : typeof equipamentos);
 
-    // Filtrar por setores se fornecido
+    // Filtrar por setores se fornecido - mesma lógica do inventário
     let equipamentosFiltrados = equipamentos;
     if (setoresFilter && setoresFilter.length > 0) {
+      // Buscar nomes dos setores usando SectorMapping do banco (mesma lógica do inventário)
+      let sectorNamesToMatch: string[] = [];
+      try {
+        const { getPrisma } = await import('../services/prismaService');
+        const prismaClient = await getPrisma();
+        if (prismaClient) {
+          const sectorMappings = await prismaClient.sectorMapping.findMany({
+            where: {
+              systemSectorId: { in: setoresFilter },
+              active: true,
+            },
+          });
+          
+          // Criar lista com todos os nomes de setores (effortSectorName prioritário)
+          sectorMappings.forEach((mapping) => {
+            if (mapping.effortSectorName) {
+              sectorNamesToMatch.push(mapping.effortSectorName);
+            }
+            if (mapping.systemSectorName && mapping.systemSectorName !== mapping.effortSectorName) {
+              sectorNamesToMatch.push(mapping.systemSectorName);
+            }
+          });
+          
+          console.log('[dashboard:availability] Setores mapeados encontrados no banco:', sectorNamesToMatch);
+        }
+        
+        // Se não encontrou mapeamento no banco, buscar nomes dos setores da API de investimentos
+        if (sectorNamesToMatch.length === 0) {
+          try {
+            const sectorsRes = await fetch(`${req.protocol}://${req.get('host')}/api/ecm/investments/sectors/list`);
+            if (sectorsRes.ok) {
+              const sectorsData = await sectorsRes.json();
+              const sectorsFromApi = sectorsData.sectors
+                ?.filter((s: any) => setoresFilter.includes(s.id))
+                .map((s: any) => s.name) || [];
+              
+              sectorNamesToMatch = sectorsFromApi;
+              console.log('[dashboard:availability] Setores encontrados na API de investimentos:', sectorNamesToMatch);
+            }
+          } catch (apiError: any) {
+            console.warn('[dashboard:availability] Erro ao buscar setores da API:', apiError?.message);
+          }
+        }
+      } catch (error: any) {
+        console.warn('[dashboard:availability] Erro ao buscar mapeamento de setores:', error?.message);
+      }
+      
+      // Função auxiliar para normalizar string (remove acentos, espaços extras)
+      const normalizarString = (str: string): string => {
+        return str
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+          .replace(/\s+/g, ' ') // Normaliza espaços
+          .trim();
+      };
+      
+      // Usar utilitário getSectorIdFromItem como fallback
       equipamentosFiltrados = equipamentos.filter((eq: any) => {
+        const eqSetor = eq.Setor || '';
+        
+        // Se temos mapeamento do banco, usar comparação flexível por nome do setor
+        if (sectorNamesToMatch.length > 0) {
+          const eqSetorNormalizado = normalizarString(eqSetor);
+          for (const sectorName of sectorNamesToMatch) {
+            const sectorNameNormalizado = normalizarString(sectorName);
+            
+            // Comparação exata
+            if (eqSetorNormalizado === sectorNameNormalizado) {
+              return true;
+            }
+            
+            // Verificar se o nome do setor está contido no setor do equipamento
+            if (eqSetorNormalizado.includes(sectorNameNormalizado) || sectorNameNormalizado.includes(eqSetorNormalizado)) {
+              return true;
+            }
+            
+            // Verificar palavras principais (para nomes compostos)
+            const palavrasSetor = sectorNameNormalizado.split(/\s+/).filter(w => w.length >= 3);
+            if (palavrasSetor.length >= 2) {
+              const palavrasCoincidentes = palavrasSetor.filter(palavra => eqSetorNormalizado.includes(palavra));
+              if (palavrasCoincidentes.length >= 2) {
+                return true;
+              }
+            }
+          }
+        }
+        
+        // Fallback: usar SetorId do equipamento ou converter nome para ID
         const sectorId = getSectorIdFromItem(eq);
-        return sectorId !== null && setoresFilter.includes(sectorId);
+        if (!sectorId) return false;
+        return setoresFilter.includes(sectorId);
       });
-      console.log('[dashboard:availability] Filtro de setores:', setoresFilter);
-      console.log('[dashboard:availability] Equipamentos filtrados:', equipamentosFiltrados.length, 'de', equipamentos.length);
+      
+      console.log('[dashboard:availability] Filtro de setores (IDs):', setoresFilter);
+      console.log('[dashboard:availability] Nomes de setores para filtrar:', sectorNamesToMatch);
+      console.log('[dashboard:availability] Equipamentos antes do filtro:', equipamentos.length);
+      console.log('[dashboard:availability] Equipamentos após filtro de setores:', equipamentosFiltrados.length);
+      
+      // Debug: mostrar alguns exemplos de setores encontrados nos equipamentos
+      if (equipamentosFiltrados.length === 0 && equipamentos.length > 0) {
+        const setoresEncontrados = new Set(equipamentos.slice(0, 50).map((eq: any) => eq.Setor || '').filter((s: string) => s));
+        console.log('[dashboard:availability] Exemplos de setores encontrados nos equipamentos (primeiros 50):', Array.from(setoresEncontrados).slice(0, 10));
+      } else if (equipamentosFiltrados.length > 0) {
+        console.log('[dashboard:availability] Exemplo de equipamento filtrado:', {
+          Id: equipamentosFiltrados[0].Id,
+          Setor: equipamentosFiltrados[0].Setor,
+          SetorId: equipamentosFiltrados[0].SetorId || getSectorIdFromItem(equipamentosFiltrados[0]),
+        });
+      }
+    } else {
+      console.log('[dashboard:availability] Sem filtro de setores, usando todos os equipamentos:', equipamentos.length);
     }
 
     // Buscar OS abertas do ano corrente - APENAS CORRETIVAS
@@ -576,40 +690,10 @@ dashboard.get('/availability', async (req, res) => {
       ? (emManutencao / totalEquipamentos) * 100 
       : 0;
 
-    // Buscar nomes reais dos setores a partir de TODOS os equipamentos (não apenas filtrados)
-    // Isso garante que encontramos os nomes mesmo se não houver equipamentos filtrados de um setor
-    const setoresNomesMap = new Map<number, string>();
-    if (setoresFilter && setoresFilter.length > 0) {
-      equipamentos.forEach((eq: any) => {
-        const sectorId = getSectorIdFromItem(eq);
-        if (sectorId && setoresFilter.includes(sectorId) && eq.Setor) {
-          // Usar o nome real do setor do equipamento (primeiro encontrado)
-          if (!setoresNomesMap.has(sectorId)) {
-            setoresNomesMap.set(sectorId, eq.Setor);
-          }
-        }
-      });
-    }
-    
-    // Se não encontrou todos os nomes nos equipamentos, tentar buscar nos mapeamentos fixos
-    const setoresFiltradosNomes: string[] = [];
-    if (setoresFilter && setoresFilter.length > 0) {
-      setoresFilter.forEach((id) => {
-        const nomeReal = setoresNomesMap.get(id);
-        if (nomeReal) {
-          setoresFiltradosNomes.push(nomeReal);
-        } else {
-          // Fallback para mapeamento fixo
-          const nomeMapeado = getSectorNamesFromIds([id])[0];
-          if (nomeMapeado) {
-            setoresFiltradosNomes.push(nomeMapeado);
-          } else {
-            // Se não encontrou, usar o ID como fallback
-            setoresFiltradosNomes.push(`Setor ${id}`);
-          }
-        }
-      });
-    }
+    // Buscar nomes dos setores - mesma lógica do inventário
+    const setoresFiltradosNomes: string[] = setoresFilter && setoresFilter.length > 0
+      ? await getSectorNamesFromUserSector(setoresFilter, equipamentos, undefined, req)
+      : [];
 
     const result = {
       totalEquipamentos,
@@ -665,12 +749,98 @@ dashboard.get('/equipment-in-maintenance', async (req, res) => {
     });
     const equipamentos = Array.isArray(equipamentosRaw) ? equipamentosRaw : [];
 
-    // Filtrar por setores se fornecido
+    // Filtrar por setores se fornecido - mesma lógica do inventário
     let equipamentosFiltrados = equipamentos;
     if (setoresFilter && setoresFilter.length > 0) {
+      // Buscar nomes dos setores usando SectorMapping do banco (mesma lógica do inventário)
+      let sectorNamesToMatch: string[] = [];
+      try {
+        const { getPrisma } = await import('../services/prismaService');
+        const prismaClient = await getPrisma();
+        if (prismaClient) {
+          const sectorMappings = await prismaClient.sectorMapping.findMany({
+            where: {
+              systemSectorId: { in: setoresFilter },
+              active: true,
+            },
+          });
+          
+          // Criar lista com todos os nomes de setores (effortSectorName prioritário)
+          sectorMappings.forEach((mapping) => {
+            if (mapping.effortSectorName) {
+              sectorNamesToMatch.push(mapping.effortSectorName);
+            }
+            if (mapping.systemSectorName && mapping.systemSectorName !== mapping.effortSectorName) {
+              sectorNamesToMatch.push(mapping.systemSectorName);
+            }
+          });
+        }
+        
+        // Se não encontrou mapeamento no banco, buscar nomes dos setores da API de investimentos
+        if (sectorNamesToMatch.length === 0) {
+          try {
+            const sectorsRes = await fetch(`${req.protocol}://${req.get('host')}/api/ecm/investments/sectors/list`);
+            if (sectorsRes.ok) {
+              const sectorsData = await sectorsRes.json();
+              const sectorsFromApi = sectorsData.sectors
+                ?.filter((s: any) => setoresFilter.includes(s.id))
+                .map((s: any) => s.name) || [];
+              
+              sectorNamesToMatch = sectorsFromApi;
+            }
+          } catch (apiError: any) {
+            console.warn('[dashboard:equipment-in-maintenance] Erro ao buscar setores da API:', apiError?.message);
+          }
+        }
+      } catch (error: any) {
+        console.warn('[dashboard:equipment-in-maintenance] Erro ao buscar mapeamento de setores:', error?.message);
+      }
+      
+      // Função auxiliar para normalizar string (remove acentos, espaços extras)
+      const normalizarString = (str: string): string => {
+        return str
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+          .replace(/\s+/g, ' ') // Normaliza espaços
+          .trim();
+      };
+      
+      // Usar utilitário getSectorIdFromItem como fallback
       equipamentosFiltrados = equipamentos.filter((eq: any) => {
+        const eqSetor = eq.Setor || '';
+        
+        // Se temos mapeamento do banco, usar comparação flexível por nome do setor
+        if (sectorNamesToMatch.length > 0) {
+          const eqSetorNormalizado = normalizarString(eqSetor);
+          for (const sectorName of sectorNamesToMatch) {
+            const sectorNameNormalizado = normalizarString(sectorName);
+            
+            // Comparação exata
+            if (eqSetorNormalizado === sectorNameNormalizado) {
+              return true;
+            }
+            
+            // Verificar se o nome do setor está contido no setor do equipamento
+            if (eqSetorNormalizado.includes(sectorNameNormalizado) || sectorNameNormalizado.includes(eqSetorNormalizado)) {
+              return true;
+            }
+            
+            // Verificar palavras principais (para nomes compostos)
+            const palavrasSetor = sectorNameNormalizado.split(/\s+/).filter(w => w.length >= 3);
+            if (palavrasSetor.length >= 2) {
+              const palavrasCoincidentes = palavrasSetor.filter(palavra => eqSetorNormalizado.includes(palavra));
+              if (palavrasCoincidentes.length >= 2) {
+                return true;
+              }
+            }
+          }
+        }
+        
+        // Fallback: usar SetorId do equipamento ou converter nome para ID
         const sectorId = getSectorIdFromItem(eq);
-        return sectorId !== null && setoresFilter.includes(sectorId);
+        if (!sectorId) return false;
+        return setoresFilter.includes(sectorId);
       });
     }
 
@@ -735,13 +905,8 @@ dashboard.get('/equipment-in-maintenance', async (req, res) => {
       equipamentoMap.set(eq.Id, eq);
     });
 
-    // Agrupar OS por equipamento
-    const equipamentosComOS = new Map<number, {
-      equipamento: any;
-      osList: any[];
-      primeiraOS: any;
-      totalOS: number;
-    }>();
+    // Criar uma entrada para cada OS individualmente (sem agrupar por equipamento)
+    const osEmManutencao: any[] = [];
     
     osAbertas.forEach((os: any) => {
       let equipamentoId: number | undefined;
@@ -762,95 +927,43 @@ dashboard.get('/equipment-in-maintenance', async (req, res) => {
       }
       
       if (equipamentoId && equipamentoMap.has(equipamentoId)) {
-        if (!equipamentosComOS.has(equipamentoId)) {
-          equipamentosComOS.set(equipamentoId, {
-            equipamento: equipamentoMap.get(equipamentoId),
-            osList: [],
-            primeiraOS: os,
-            totalOS: 0,
-          });
-        }
+        const equipamento = equipamentoMap.get(equipamentoId);
         
-        const entry = equipamentosComOS.get(equipamentoId)!;
-        entry.osList.push(os);
-        entry.totalOS = entry.osList.length;
-        
-        // Manter a OS mais antiga como primeiraOS
-        const dataAberturaAtual = new Date(entry.primeiraOS.Abertura || entry.primeiraOS.DataAbertura || '9999-12-31');
-        const dataAberturaNova = new Date(os.Abertura || os.DataAbertura || '9999-12-31');
-        if (dataAberturaNova < dataAberturaAtual) {
-          entry.primeiraOS = os;
-        }
+        // Criar uma entrada individual para cada OS
+        osEmManutencao.push({
+          id: equipamento.Id,
+          tag: equipamento.Tag || 'N/A',
+          nome: equipamento.Equipamento || 'Sem nome',
+          setor: equipamento.Setor || 'Não informado',
+          setorId: getSectorIdFromItem(equipamento),
+          os: {
+            codigo: os.OS || os.CodigoSerialOS || 'N/A',
+            codigoSerial: os.CodigoSerialOS,
+            abertura: os.Abertura || os.DataAbertura || null,
+            tipoManutencao: os.TipoDeManutencao || os.TipoManutencao || 'Não informado',
+            prioridade: os.Prioridade || 'Não informado',
+            situacao: os.SituacaoDaOS || os.Situacao || 'Aberta',
+            ocorrencia: os.Ocorrencia || os.Ocorrência || os.Descricao || os.Descrição || os.Problema || os.Relato || null,
+            // Incluir todos os dados completos da OS
+            dadosCompletos: os,
+          },
+        });
       }
     });
 
-    // Converter para array e ordenar por data de abertura da primeira OS (mais antiga primeiro)
-    const equipamentosEmManutencao = Array.from(equipamentosComOS.values())
-      .map((entry) => ({
-        id: entry.equipamento.Id,
-        tag: entry.equipamento.Tag || 'N/A',
-        nome: entry.equipamento.Equipamento || 'Sem nome',
-        setor: entry.equipamento.Setor || 'Não informado',
-        setorId: getSectorIdFromItem(entry.equipamento),
-        primeiraOS: {
-          codigo: entry.primeiraOS.OS || entry.primeiraOS.CodigoSerialOS || 'N/A',
-          abertura: entry.primeiraOS.Abertura || entry.primeiraOS.DataAbertura || null,
-          tipoManutencao: entry.primeiraOS.TipoDeManutencao || entry.primeiraOS.TipoManutencao || 'Não informado',
-          prioridade: entry.primeiraOS.Prioridade || 'Não informado',
-          situacao: entry.primeiraOS.SituacaoDaOS || entry.primeiraOS.Situacao || 'Aberta',
-          // Incluir todos os dados completos da OS
-          dadosCompletos: entry.primeiraOS,
-        },
-        totalOS: entry.totalOS,
-        todasOS: entry.osList.map((os: any) => ({
-          codigo: os.OS || os.CodigoSerialOS || 'N/A',
-          abertura: os.Abertura || os.DataAbertura || null,
-          tipoManutencao: os.TipoDeManutencao || os.TipoManutencao || 'Não informado',
-          prioridade: os.Prioridade || 'Não informado',
-          dadosCompletos: os, // Incluir todos os dados completos
-        })),
-      }))
+    // Ordenar por data de abertura (mais antiga primeiro) e limitar resultados
+    const equipamentosEmManutencao = osEmManutencao
       .sort((a, b) => {
-        const dataA = a.primeiraOS.abertura ? new Date(a.primeiraOS.abertura).getTime() : 0;
-        const dataB = b.primeiraOS.abertura ? new Date(b.primeiraOS.abertura).getTime() : 0;
+        const dataA = a.os.abertura ? new Date(a.os.abertura).getTime() : 0;
+        const dataB = b.os.abertura ? new Date(b.os.abertura).getTime() : 0;
         return dataA - dataB; // Mais antiga primeiro
       })
       .slice(0, limit); // Limitar resultados
 
-    // Buscar nomes reais dos setores a partir de TODOS os equipamentos (não apenas filtrados)
-    // Isso garante que encontramos os nomes mesmo se não houver equipamentos filtrados de um setor
-    const setoresNomesMap = new Map<number, string>();
-    if (setoresFilter && setoresFilter.length > 0) {
-      equipamentos.forEach((eq: any) => {
-        const sectorId = getSectorIdFromItem(eq);
-        if (sectorId && setoresFilter.includes(sectorId) && eq.Setor) {
-          // Usar o nome real do setor do equipamento (primeiro encontrado)
-          if (!setoresNomesMap.has(sectorId)) {
-            setoresNomesMap.set(sectorId, eq.Setor);
-          }
-        }
-      });
-    }
-    
-    // Se não encontrou todos os nomes nos equipamentos, tentar buscar nos mapeamentos fixos
-    const setoresFiltradosNomes: string[] = [];
-    if (setoresFilter && setoresFilter.length > 0) {
-      setoresFilter.forEach((id) => {
-        const nomeReal = setoresNomesMap.get(id);
-        if (nomeReal) {
-          setoresFiltradosNomes.push(nomeReal);
-        } else {
-          // Fallback para mapeamento fixo
-          const nomeMapeado = getSectorNamesFromIds([id])[0];
-          if (nomeMapeado) {
-            setoresFiltradosNomes.push(nomeMapeado);
-          } else {
-            // Se não encontrou, usar o ID como fallback
-            setoresFiltradosNomes.push(`Setor ${id}`);
-          }
-        }
-      });
-    }
+    // Buscar nomes dos setores - mesma lógica do inventário
+    const setoresFiltradosNomes: string[] = setoresFilter && setoresFilter.length > 0
+      ? await getSectorNamesFromUserSector(setoresFilter, equipamentos, undefined, req)
+      : [];
 
     const result = {
       equipamentos: equipamentosEmManutencao,

@@ -18,6 +18,10 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { theme } from '../styles/theme';
 import { formatBrazilianDate } from '../utils/dateUtils';
+import ExportButton from '../components/ExportButton';
+import ConfirmationDialog from '../components/ConfirmationDialog';
+import ErrorMessage from '../components/ErrorMessage';
+import SkeletonScreen from '../components/SkeletonScreen';
 import toast from 'react-hot-toast';
 
 interface Investment {
@@ -39,6 +43,10 @@ interface Investment {
     sectorName: string;
     weekStart: string;
   };
+  // Campos para controle de compra (quando autorizado/aprovado)
+  ordemCompra?: string | null;
+  dataSolicitacao?: string | null;
+  dataChegada?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -53,6 +61,10 @@ export default function InvestmentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<{ status?: string; categoria?: string; setor?: string }>({});
   const [showFilters, setShowFilters] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string | null }>({
+    isOpen: false,
+    id: null,
+  });
 
   const queryClient = useQueryClient();
 
@@ -156,11 +168,19 @@ export default function InvestmentsPage() {
       const res = await fetch(`/api/ecm/investments/${id}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('Erro ao deletar investimento');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Erro ao deletar investimento');
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['investments'] });
+      toast.success('Investimento excluído com sucesso');
+      setDeleteConfirm({ isOpen: false, id: null });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao excluir investimento');
     },
   });
 
@@ -200,13 +220,59 @@ export default function InvestmentsPage() {
 
   const categorias = ['Equipamento', 'Infraestrutura', 'Melhoria', 'Substituição', 'Outros'];
   const prioridades = ['Baixa', 'Média', 'Alta', 'Crítica'];
-  const statuses = ['Proposto', 'Em Análise', 'Aprovado', 'Em Execução', 'Concluído', 'Cancelado'];
+  const statuses = ['Proposto', 'Em Análise', 'Aprovado', 'Autorizado', 'Em Execução', 'Concluído', 'Cancelado'];
 
-  const totalValue = investments?.reduce((acc, inv) => acc + inv.valorEstimado, 0) || 0;
-  const byStatus = investments?.reduce((acc: Record<string, number>, inv) => {
-    acc[inv.status] = (acc[inv.status] || 0) + 1;
-    return acc;
-  }, {}) || {};
+  // Calcular valores totais - garantir que sempre tenham valores válidos
+  const totalValue = useMemo(() => {
+    if (!investments || investments.length === 0) return 0;
+    return investments.reduce((acc, inv) => {
+      const valor = Number(inv.valorEstimado) || 0;
+      return acc + valor;
+    }, 0);
+  }, [investments]);
+
+  const byStatus = useMemo(() => {
+    if (!investments || investments.length === 0) return {};
+    return investments.reduce((acc: Record<string, number>, inv) => {
+      const status = inv.status || 'Sem Status';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+  }, [investments]);
+
+  const totalItems = investments?.length || 0;
+
+  // Calcular tempo médio entre solicitação e chegada para investimentos aprovados
+  const tempoMedioEntrega = useMemo(() => {
+    if (!investments) return null;
+    
+    const aprovadosComDatas = investments.filter(
+      (inv) =>
+        (inv.status === 'Aprovado' || inv.status === 'Autorizado') &&
+        inv.dataSolicitacao &&
+        inv.dataChegada
+    );
+    
+    if (aprovadosComDatas.length === 0) return null;
+    
+    const tempos: number[] = [];
+    aprovadosComDatas.forEach((inv) => {
+      try {
+        const dataSolicitacao = new Date(inv.dataSolicitacao!);
+        const dataChegada = new Date(inv.dataChegada!);
+        const diffTime = Math.abs(dataChegada.getTime() - dataSolicitacao.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        tempos.push(diffDays);
+      } catch {
+        // Ignorar datas inválidas
+      }
+    });
+    
+    if (tempos.length === 0) return null;
+    
+    const media = tempos.reduce((acc, tempo) => acc + tempo, 0) / tempos.length;
+    return Math.round(media * 10) / 10; // Arredondar para 1 casa decimal
+  }, [investments]);
 
   // Agregar investimentos por setor para o gráfico (Top 10)
   const investmentsBySector = useMemo(() => {
@@ -266,31 +332,54 @@ export default function InvestmentsPage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div style={{ padding: theme.spacing.xl, textAlign: 'center' }}>
-        <p style={{ color: theme.colors.gray[600] }}>Carregando investimentos...</p>
-      </div>
-    );
-  }
+  // Debug: verificar dados calculados
+  useEffect(() => {
+    console.log('[InvestmentsPage] Debug dos valores:', {
+      investmentsCount: investments?.length || 0,
+      totalValue,
+      totalItems,
+      byStatus,
+      investments: investments?.slice(0, 3).map(inv => ({ 
+        id: inv.id, 
+        titulo: inv.titulo, 
+        valorEstimado: inv.valorEstimado,
+        status: inv.status 
+      }))
+    });
+  }, [investments, totalValue, totalItems, byStatus]);
 
   if (error) {
     return (
-      <div
-        style={{
-          padding: theme.spacing.xl,
-          backgroundColor: `${theme.colors.danger}15`,
-          borderRadius: theme.borderRadius.md,
-          color: theme.colors.danger,
-        }}
-      >
-        Erro ao carregar dados: {String(error)}
+      <div style={{ padding: theme.spacing.xl }}>
+        <ErrorMessage
+          title="Erro ao carregar investimentos"
+          message={error instanceof Error ? error.message : 'Não foi possível carregar os investimentos. Verifique sua conexão e tente novamente.'}
+          onRetry={() => queryClient.invalidateQueries({ queryKey: ['investments'] })}
+          retryText="Tentar novamente"
+        />
       </div>
     );
   }
 
   return (
     <div style={{ padding: theme.spacing.xl, maxWidth: '1600px', margin: '0 auto' }}>
+      {/* Diálogo de confirmação de exclusão */}
+      <ConfirmationDialog
+        isOpen={deleteConfirm.isOpen}
+        title="Excluir Investimento"
+        message="Tem certeza que deseja excluir este investimento? Esta ação não pode ser desfeita."
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        type="danger"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteConfirm.id) {
+            deleteMutation.mutate(deleteConfirm.id);
+          }
+        }}
+        onCancel={() => setDeleteConfirm({ isOpen: false, id: null })}
+      />
+
       <div style={{ marginBottom: theme.spacing.lg }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
@@ -310,8 +399,31 @@ export default function InvestmentsPage() {
             <p style={{ color: theme.colors.gray[600], margin: 0 }}>
               Gestão de investimentos e projetos
             </p>
+            {tempoMedioEntrega !== null && (
+              <p style={{ color: theme.colors.primary, margin: `${theme.spacing.xs} 0 0 0`, fontSize: '14px', fontWeight: 600 }}>
+                ⏱️ Tempo médio de entrega: {tempoMedioEntrega} dias
+              </p>
+            )}
           </div>
-          <div style={{ display: 'flex', gap: theme.spacing.sm }}>
+          <div style={{ display: 'flex', gap: theme.spacing.sm, flexWrap: 'wrap' }}>
+            {investments && investments.length > 0 && (
+              <ExportButton
+                data={investments}
+                filename={`investimentos-${new Date().toISOString().split('T')[0]}`}
+                columns={[
+                  { key: 'titulo', label: 'Título' },
+                  { key: 'descricao', label: 'Descrição' },
+                  { key: 'categoria', label: 'Categoria' },
+                  { key: 'valorEstimado', label: 'Valor Estimado' },
+                  { key: 'prioridade', label: 'Prioridade' },
+                  { key: 'status', label: 'Status' },
+                  { key: 'setor', label: 'Setor' },
+                  { key: 'createdAt', label: 'Data de Criação' },
+                ]}
+                variant="both"
+                label="Exportar"
+              />
+            )}
             <button
               onClick={() => setShowFilters(!showFilters)}
               style={{
@@ -370,13 +482,26 @@ export default function InvestmentsPage() {
             borderRadius: theme.borderRadius.md,
             boxShadow: theme.shadows.md,
             borderTop: `4px solid ${theme.colors.primary}`,
+            minHeight: '100px',
           }}
         >
-          <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600] }}>
+          <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600], fontWeight: 500 }}>
             Valor Total
           </p>
-          <h3 style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '24px', fontWeight: 700 }}>
-            {formatCurrency(totalValue)}
+          <h3 style={{ 
+            margin: `${theme.spacing.xs} 0 0 0`, 
+            fontSize: '24px', 
+            fontWeight: 700, 
+            color: theme.colors.dark,
+            minHeight: '32px',
+            display: 'flex',
+            alignItems: 'center',
+          }}>
+            {isLoading ? (
+              <span style={{ color: theme.colors.gray[400] }}>Carregando...</span>
+            ) : (
+              formatCurrency(totalValue)
+            )}
           </h3>
         </div>
         <div
@@ -386,13 +511,26 @@ export default function InvestmentsPage() {
             borderRadius: theme.borderRadius.md,
             boxShadow: theme.shadows.md,
             borderTop: `4px solid ${theme.colors.success}`,
+            minHeight: '100px',
           }}
         >
-          <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600] }}>
+          <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600], fontWeight: 500 }}>
             Total de Itens
           </p>
-          <h3 style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '24px', fontWeight: 700 }}>
-            {investments?.length || 0}
+          <h3 style={{ 
+            margin: `${theme.spacing.xs} 0 0 0`, 
+            fontSize: '24px', 
+            fontWeight: 700, 
+            color: theme.colors.dark,
+            minHeight: '32px',
+            display: 'flex',
+            alignItems: 'center',
+          }}>
+            {isLoading ? (
+              <span style={{ color: theme.colors.gray[400] }}>Carregando...</span>
+            ) : (
+              totalItems
+            )}
           </h3>
         </div>
         {Object.entries(byStatus).slice(0, 2).map(([status, count]) => (
@@ -404,10 +542,19 @@ export default function InvestmentsPage() {
               borderRadius: theme.borderRadius.md,
               boxShadow: theme.shadows.md,
               borderTop: `4px solid ${getStatusColor(status)}`,
+              minHeight: '100px',
             }}
           >
-            <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600] }}>{status}</p>
-            <h3 style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '24px', fontWeight: 700 }}>
+            <p style={{ margin: 0, fontSize: '14px', color: theme.colors.gray[600], fontWeight: 500 }}>{status}</p>
+            <h3 style={{ 
+              margin: `${theme.spacing.xs} 0 0 0`, 
+              fontSize: '24px', 
+              fontWeight: 700, 
+              color: theme.colors.dark,
+              minHeight: '32px',
+              display: 'flex',
+              alignItems: 'center',
+            }}>
               {count}
             </h3>
           </div>
@@ -689,6 +836,8 @@ export default function InvestmentsPage() {
           prioridades={prioridades}
           statuses={statuses}
           sectors={sectorsData?.sectors || []}
+          sectorsLoading={sectorsLoading}
+          sectorsError={sectorsError}
         />
       )}
 
@@ -705,9 +854,7 @@ export default function InvestmentsPage() {
             updateMutation.mutate({ id, data });
           }}
           onDelete={(id) => {
-            if (confirm('Tem certeza que deseja excluir este investimento?')) {
-              deleteMutation.mutate(id);
-            }
+            setDeleteConfirm({ isOpen: true, id });
           }}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
@@ -1018,6 +1165,10 @@ function EditableTable({
           ? formatCurrency(value)
           : field === 'dataPrevista' && value
           ? formatDate(value)
+          : field === 'dataSolicitacao' && value
+          ? formatDate(value)
+          : field === 'dataChegada' && value
+          ? formatDate(value)
           : field === 'status' && value
           ? (
                     <span
@@ -1123,6 +1274,52 @@ function EditableTable({
               onSort={handleSort}
               minWidth="120px"
             />
+            {/* Colunas de controle de compra - apenas para investimentos aprovados */}
+            {(() => {
+              const temAprovados = localInvestments.some((inv) => inv.status === 'Aprovado' || inv.status === 'Autorizado');
+              console.log('[EditableTable] Verificando colunas de controle de compra:', {
+                totalInvestments: localInvestments.length,
+                temAprovados,
+                statuses: localInvestments.map(inv => inv.status),
+              });
+              return temAprovados;
+            })() && (
+              <>
+                <SortableHeader
+                  field="ordemCompra"
+                  label="Ordem de Compra"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                  minWidth="140px"
+                />
+                <SortableHeader
+                  field="dataSolicitacao"
+                  label="Data Solicitação"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                  minWidth="140px"
+                />
+                <SortableHeader
+                  field="dataChegada"
+                  label="Data Chegada"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                  minWidth="140px"
+                />
+                <th
+                  style={{
+                    padding: '12px 8px',
+                    textAlign: 'left',
+                    fontWeight: 600,
+                    color: theme.colors.dark,
+                    borderRight: `1px solid ${theme.colors.gray[300]}`,
+                    minWidth: '120px',
+                  }}
+                >
+                  Tempo Médio
+                </th>
+              </>
+            )}
             <SortableHeader
               field="setor"
               label="Setor"
@@ -1203,6 +1400,43 @@ function EditableTable({
               <td style={{ padding: 0, borderRight: `1px solid ${theme.colors.gray[200]}` }}>
                 <EditableCell rowId={inv.id} field="status" value={inv.status} type="select" options={statuses} />
               </td>
+              {/* Células de controle de compra - apenas para investimentos aprovados */}
+              {(inv.status === 'Aprovado' || inv.status === 'Autorizado') && (
+                <>
+                  <td style={{ padding: 0, borderRight: `1px solid ${theme.colors.gray[200]}` }}>
+                    <EditableCell rowId={inv.id} field="ordemCompra" value={inv.ordemCompra} />
+                  </td>
+                  <td style={{ padding: 0, borderRight: `1px solid ${theme.colors.gray[200]}` }}>
+                    <EditableCell rowId={inv.id} field="dataSolicitacao" value={inv.dataSolicitacao} type="date" />
+                  </td>
+                  <td style={{ padding: 0, borderRight: `1px solid ${theme.colors.gray[200]}` }}>
+                    <EditableCell rowId={inv.id} field="dataChegada" value={inv.dataChegada} type="date" />
+                  </td>
+                  <td
+                    style={{
+                      padding: '8px',
+                      borderRight: `1px solid ${theme.colors.gray[200]}`,
+                      textAlign: 'center',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: theme.colors.dark,
+                    }}
+                  >
+                    {(() => {
+                      if (!inv.dataSolicitacao || !inv.dataChegada) return '-';
+                      try {
+                        const dataSolicitacao = new Date(inv.dataSolicitacao);
+                        const dataChegada = new Date(inv.dataChegada);
+                        const diffTime = Math.abs(dataChegada.getTime() - dataSolicitacao.getTime());
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        return `${diffDays} dias`;
+                      } catch {
+                        return '-';
+                      }
+                    })()}
+                  </td>
+                </>
+              )}
               <td style={{ padding: 0, borderRight: `1px solid ${theme.colors.gray[200]}` }}>
                 <EditableCell rowId={inv.id} field="setor" value={inv.setor} />
               </td>
@@ -1318,6 +1552,8 @@ function InvestmentForm({
   prioridades,
   statuses,
   sectors,
+  sectorsLoading,
+  sectorsError,
 }: {
   investment?: Investment;
   onSave: (data: Partial<Investment>) => void;
@@ -1326,6 +1562,8 @@ function InvestmentForm({
   prioridades: string[];
   statuses: string[];
   sectors: Sector[];
+  sectorsLoading: boolean;
+  sectorsError: Error | null;
 }) {
   // Debug: verificar se os setores estão chegando
   useEffect(() => {
@@ -1393,6 +1631,9 @@ function InvestmentForm({
         responsavel: investment.responsavel || '',
         dataPrevista: investment.dataPrevista || '',
         observacoes: investment.observacoes || '',
+        ordemCompra: investment.ordemCompra || '',
+        dataSolicitacao: investment.dataSolicitacao || '',
+        dataChegada: investment.dataChegada || '',
       });
       setValorFormatado(investment.valorEstimado ? formatCurrency(investment.valorEstimado) : 'R$ 0,00');
     }
@@ -1645,6 +1886,83 @@ function InvestmentForm({
             />
           </div>
         </div>
+        {/* Campos de controle de compra - apenas quando status for Aprovado ou Autorizado */}
+        {(formData.status === 'Aprovado' || formData.status === 'Autorizado') && (
+          <div style={{ marginTop: theme.spacing.md, padding: theme.spacing.md, backgroundColor: theme.colors.gray[50], borderRadius: theme.borderRadius.md }}>
+            <h3 style={{ margin: `0 0 ${theme.spacing.md} 0`, fontSize: '16px', fontWeight: 600, color: theme.colors.dark }}>
+              Controle de Compra
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: theme.spacing.md }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  Ordem de Compra
+                </label>
+                <input
+                  type="text"
+                  value={formData.ordemCompra || ''}
+                  onChange={(e) => setFormData({ ...formData, ordemCompra: e.target.value || undefined })}
+                  placeholder="Número da ordem de compra"
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  Data da Solicitação
+                </label>
+                <input
+                  type="date"
+                  value={formData.dataSolicitacao ? new Date(formData.dataSolicitacao).toISOString().split('T')[0] : ''}
+                  onChange={(e) => setFormData({ ...formData, dataSolicitacao: e.target.value || undefined })}
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  Data de Chegada
+                </label>
+                <input
+                  type="date"
+                  value={formData.dataChegada ? new Date(formData.dataChegada).toISOString().split('T')[0] : ''}
+                  onChange={(e) => setFormData({ ...formData, dataChegada: e.target.value || undefined })}
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+            </div>
+            {formData.dataSolicitacao && formData.dataChegada && (
+              <div style={{ marginTop: theme.spacing.sm, padding: theme.spacing.sm, backgroundColor: theme.colors.white, borderRadius: theme.borderRadius.sm }}>
+                <p style={{ margin: 0, fontSize: '14px', color: theme.colors.dark }}>
+                  <strong>Tempo de entrega:</strong>{' '}
+                  {(() => {
+                    try {
+                      const dataSolicitacao = new Date(formData.dataSolicitacao);
+                      const dataChegada = new Date(formData.dataChegada);
+                      const diffTime = Math.abs(dataChegada.getTime() - dataSolicitacao.getTime());
+                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      return `${diffDays} dias`;
+                    } catch {
+                      return '-';
+                    }
+                  })()}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
         <div>
           <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
             Descrição

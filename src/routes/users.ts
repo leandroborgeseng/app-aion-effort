@@ -3,16 +3,9 @@ import { Router } from 'express';
 import * as fs from 'node:fs/promises';
 import { getSectorIdFromName } from '../utils/sectorMapping';
 
-const USE_MOCK = process.env.USE_MOCK === 'true';
+import { getPrisma } from '../services/prismaService';
 
-let prisma: any = null;
-async function getPrisma() {
-  if (!prisma && !USE_MOCK) {
-    const { PrismaClient } = await import('@prisma/client');
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
+const USE_MOCK = process.env.USE_MOCK === 'true';
 
 export const users = Router();
 
@@ -227,7 +220,7 @@ users.post('/', async (req, res) => {
 users.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { email, name, role, active, sectors, canImpersonate, managedUserIds } = req.body;
+    const { email, name, phone, role, active, sectors, canImpersonate, managedUserIds } = req.body;
 
     if (USE_MOCK) {
       const updatedUser = {
@@ -303,6 +296,7 @@ users.patch('/:id', async (req, res) => {
           ...(role && { role }),
           ...(active !== undefined && { active }),
           ...(canImpersonate !== undefined && { canImpersonate }),
+          ...(req.body.phone !== undefined && { phone: req.body.phone }),
         },
         include: {
           sectors: true,

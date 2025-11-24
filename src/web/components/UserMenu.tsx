@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FiUser, FiLogOut, FiEdit2, FiShield, FiX, FiSave, FiUsers, FiSettings } from 'react-icons/fi';
+import { FiUser, FiLogOut, FiEdit2, FiShield, FiX, FiSave, FiUsers, FiSettings, FiLock, FiPhone, FiMail } from 'react-icons/fi';
 import { useUser } from '../contexts/UserContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { theme } from '../styles/theme';
@@ -11,6 +11,7 @@ interface User {
   id: string;
   email: string;
   name: string;
+  phone?: string;
   role: 'admin' | 'comum' | 'gerente';
   active: boolean;
   canImpersonate: boolean;
@@ -18,14 +19,25 @@ interface User {
 }
 
 export default function UserMenu() {
-  const { user, impersonation, startImpersonation, stopImpersonation, setUser } = useUser();
+  const { user, impersonation, startImpersonation, stopImpersonation, setUser, isLoading } = useUser();
   const { isAdmin, isGerente } = usePermissions();
+  
+  // Debug: verificar se o usuário está disponível
+  useEffect(() => {
+    console.log('[UserMenu] Usuário disponível:', !!user, user?.name, user?.email, 'isLoading:', isLoading);
+  }, [user, isLoading]);
   const navigate = useNavigate();
   const location = useLocation();
   const [showMenu, setShowMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImpersonateModal, setShowImpersonateModal] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<User>>({});
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
   const menuRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -60,19 +72,52 @@ export default function UserMenu() {
   // Atualizar perfil do usuário
   const updateProfileMutation = useMutation({
     mutationFn: async (data: Partial<User>) => {
+      const token = localStorage.getItem('auth_token');
       const res = await fetch(`/api/users/${user?.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Erro ao atualizar perfil');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Erro ao atualizar perfil');
+      }
       return res.json();
     },
     onSuccess: (updatedUser) => {
       setUser(updatedUser);
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
       setShowEditModal(false);
       setEditFormData({});
+    },
+  });
+
+  // Trocar senha
+  const changePasswordMutation = useMutation({
+    mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Erro ao trocar senha');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowChangePasswordModal(false);
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      alert('Senha alterada com sucesso!');
     },
   });
 
@@ -109,6 +154,7 @@ export default function UserMenu() {
     setEditFormData({
       name: user.name,
       email: user.email,
+      phone: user.phone || '',
     });
     setShowEditModal(true);
     setShowMenu(false);
@@ -117,6 +163,21 @@ export default function UserMenu() {
   const handleSaveProfile = () => {
     if (!user) return;
     updateProfileMutation.mutate(editFormData);
+  };
+
+  const handleChangePassword = () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      alert('As senhas não coincidem!');
+      return;
+    }
+    if (passwordData.newPassword.length < 8) {
+      alert('A nova senha deve ter no mínimo 8 caracteres!');
+      return;
+    }
+    changePasswordMutation.mutate({
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword,
+    });
   };
 
   const handleImpersonate = async (targetUser: User) => {
@@ -173,7 +234,10 @@ export default function UserMenu() {
     }
   };
 
-  if (!user) return null;
+  // Se não há usuário, não renderizar (o MainLayout já controla quando renderizar)
+  if (!user) {
+    return null;
+  }
 
   const canImpersonate = isAdmin || isGerente || user.canImpersonate;
   const currentDisplayUser = impersonation.isImpersonating 
@@ -182,11 +246,10 @@ export default function UserMenu() {
 
   return (
     <>
-      <div ref={menuRef} style={{ position: 'relative' }}>
+      <div ref={menuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <button
           onClick={() => setShowMenu(!showMenu)}
           style={{
-            marginLeft: theme.spacing.md,
             padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
             borderRadius: theme.borderRadius.sm,
             backgroundColor: `${getRoleColor()}15`,
@@ -197,6 +260,10 @@ export default function UserMenu() {
             cursor: 'pointer',
             fontSize: '12px',
             transition: 'all 0.2s',
+            flexShrink: 0,
+            zIndex: 10,
+            whiteSpace: 'nowrap',
+            minWidth: 'fit-content',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = `${getRoleColor()}25`;
@@ -511,7 +578,6 @@ export default function UserMenu() {
                   style={{
                     width: '100%',
                     padding: theme.spacing.sm,
-                    borderRadius: theme.borderRadius.sm,
                     border: `1px solid ${theme.colors.gray[300]}`,
                     fontSize: '14px',
                   }}
@@ -520,6 +586,7 @@ export default function UserMenu() {
 
               <div>
                 <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  <FiMail size={14} style={{ display: 'inline', marginRight: theme.spacing.xs }} />
                   Email
                 </label>
                 <input
@@ -529,11 +596,75 @@ export default function UserMenu() {
                   style={{
                     width: '100%',
                     padding: theme.spacing.sm,
-                    borderRadius: theme.borderRadius.sm,
                     border: `1px solid ${theme.colors.gray[300]}`,
                     fontSize: '14px',
                   }}
                 />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  <FiPhone size={14} style={{ display: 'inline', marginRight: theme.spacing.xs }} />
+                  Celular
+                </label>
+                <input
+                  type="tel"
+                  placeholder="(00) 00000-0000"
+                  value={editFormData.phone || ''}
+                  onChange={(e) => {
+                    // Formatar telefone brasileiro
+                    let value = e.target.value.replace(/\D/g, '');
+                    if (value.length <= 11) {
+                      if (value.length > 10) {
+                        value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                      } else if (value.length > 6) {
+                        value = value.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+                      } else if (value.length > 2) {
+                        value = value.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+                      }
+                      setEditFormData({ ...editFormData, phone: value });
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginTop: theme.spacing.sm, paddingTop: theme.spacing.md, borderTop: `1px solid ${theme.colors.gray[200]}` }}>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setShowChangePasswordModal(true);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                    border: `1px solid ${theme.colors.primary}`,
+                    backgroundColor: 'transparent',
+                    color: theme.colors.primary,
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: theme.spacing.xs,
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `${theme.colors.primary}10`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <FiLock size={16} />
+                  Trocar Senha
+                </button>
               </div>
             </div>
 
@@ -695,6 +826,152 @@ export default function UserMenu() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Trocar Senha */}
+      {showChangePasswordModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+          }}
+          onClick={() => setShowChangePasswordModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: theme.colors.white,
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.lg,
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md }}>
+              <h2 style={{ margin: 0, fontSize: '20px', color: theme.colors.dark, display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}>
+                <FiLock size={20} />
+                Trocar Senha
+              </h2>
+              <button
+                onClick={() => setShowChangePasswordModal(false)}
+                style={{
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  cursor: 'pointer',
+                  padding: theme.spacing.xs,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <FiX size={20} color={theme.colors.gray[600]} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.md }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  Senha Atual
+                </label>
+                <input
+                  type="password"
+                  value={passwordData.currentPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  Nova Senha
+                </label>
+                <input
+                  type="password"
+                  value={passwordData.newPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    fontSize: '14px',
+                  }}
+                />
+                <p style={{ fontSize: '12px', color: theme.colors.gray[600], marginTop: theme.spacing.xs / 2, marginBottom: 0 }}>
+                  Mínimo de 8 caracteres, com pelo menos uma letra maiúscula, uma minúscula e um número
+                </p>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500 }}>
+                  Confirmar Nova Senha
+                </label>
+                <input
+                  type="password"
+                  value={passwordData.confirmPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: theme.spacing.sm, marginTop: theme.spacing.lg, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowChangePasswordModal(false);
+                  setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                }}
+                style={{
+                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                  borderRadius: theme.borderRadius.md,
+                  border: `1px solid ${theme.colors.gray[300]}`,
+                  backgroundColor: theme.colors.white,
+                  color: theme.colors.gray[700],
+                  cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleChangePassword}
+                disabled={changePasswordMutation.isPending || !passwordData.currentPassword || !passwordData.newPassword || passwordData.newPassword !== passwordData.confirmPassword}
+                style={{
+                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                  borderRadius: theme.borderRadius.md,
+                  border: 'none',
+                  backgroundColor: theme.colors.primary,
+                  color: theme.colors.white,
+                  cursor: changePasswordMutation.isPending || !passwordData.currentPassword || !passwordData.newPassword || passwordData.newPassword !== passwordData.confirmPassword ? 'not-allowed' : 'pointer',
+                  opacity: changePasswordMutation.isPending || !passwordData.currentPassword || !passwordData.newPassword || passwordData.newPassword !== passwordData.confirmPassword ? 0.6 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: theme.spacing.xs,
+                }}
+              >
+                <FiSave size={16} />
+                {changePasswordMutation.isPending ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

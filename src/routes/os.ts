@@ -1,80 +1,46 @@
 // src/routes/os.ts
 import { Router } from 'express';
-import { dataSource } from '../adapters/dataSource';
-import { getCache, setCache, generateCacheKey } from '../services/cacheService';
-import { filterOSByWorkshop, filterOSByWorkshopClassification } from '../services/workshopFilterService';
+import { isOSInMaintenanceList } from './dashboard';
+import { filterOSByWorkshop } from '../services/workshopFilterService';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
 
 const USE_MOCK = process.env.USE_MOCK === 'true';
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutos
+
+import { getPrisma } from '../services/prismaService';
 
 export const os = Router();
 
+// GET /api/ecm/os - Listar ordens de serviço com paginação
 os.get('/', async (req, res) => {
   try {
     // Parâmetros de paginação
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = parseInt(req.query.pageSize as string) || 50;
-    const skip = (page - 1) * pageSize;
     
-    // Filtros: apenas abertas ou todas, apenas com custo ou todas
-    const apenasAbertas = req.query.apenasAbertas === 'true';
-    const apenasComCusto = req.query.apenasComCusto === 'true';
+    console.log('[os] Buscando OS usando lógica do dashboard...');
+    console.log('[os] Paginação:', { page, pageSize });
+
+    const { dataSource } = await import('../adapters/dataSource');
     
-    // Filtro de setores (array de IDs de setores)
-    const setoresFilter = req.query.setores 
-      ? (req.query.setores as string).split(',').map(s => parseInt(s.trim())).filter(Boolean)
-      : null;
-
-    // Ano vigente (ano atual)
-    const currentYear = new Date().getFullYear();
-    const periodo = 'AnoCorrente'; // Buscar do ano corrente
-
-    console.log('[os] Iniciando busca de ordens de serviço...');
-    console.log('[os] USE_MOCK:', USE_MOCK);
-    console.log('[os] Ano vigente:', currentYear);
-    console.log('[os] Apenas abertas:', apenasAbertas);
-    console.log('[os] Apenas com custo:', apenasComCusto);
-    console.log('[os] Paginação:', { page, pageSize, skip });
-
-    // Chave de cache para a lista completa de OS do ano vigente
-    const cacheKey = generateCacheKey('os:ano-vigente', { ano: currentYear });
-    
-    // Limpar cache antigo se necessário
-    if (req.query.forceRefresh === 'true') {
-      const { deleteCache } = await import('../services/cacheService');
-      await deleteCache(cacheKey);
-      console.log('[os] Cache limpo, forçando nova busca');
+    // Verificar se dataSource está disponível
+    if (!dataSource || !dataSource.osResumida) {
+      console.error('[os] dataSource não disponível ou método osResumida não encontrado');
+      return res.status(500).json({ 
+        error: true, 
+        message: 'Serviço de dados não disponível' 
+      });
     }
     
-    // Tentar buscar do cache primeiro
-    let osList: any[] | null = null;
-    if (!USE_MOCK && req.query.forceRefresh !== 'true') {
-      osList = await getCache<any[]>(cacheKey, CACHE_TTL);
-      if (osList) {
-        console.log('[os] Dados carregados do cache');
-        // Aplicar filtro de oficinas mesmo quando vem do cache (pode ter mudado)
-        osList = await filterOSByWorkshop(osList);
-        console.log(`[os] OS após filtro de oficinas habilitadas (cache): ${osList.length}`);
-        
-        // Aplicar filtro de oficinas com classificação (excluir oficinas sem classificação)
-        osList = await filterOSByWorkshopClassification(osList);
-        console.log(`[os] OS após filtro de oficinas com classificação (cache): ${osList.length}`);
-      }
-    }
-
-    // Se não estiver em cache, buscar da API
-    if (!osList) {
-      console.log('[os] Buscando dados da API...');
-      
-      // Buscar todas as OS do ano (aumentar limite para garantir que pegamos todas)
-      // Fazer múltiplas requisições se necessário
-      let osData: any[] = [];
-      let paginaAtual = 0;
-      const qtdPorPagina = 50000; // Aumentar limite
-      let temMaisDados = true;
-      
-      while (temMaisDados && paginaAtual < 10) { // Limite de segurança: máximo 10 páginas
-        console.log(`[os] Buscando página ${paginaAtual}...`);
+    // Buscar OS do ano corrente (mesma lógica do dashboard)
+    const periodo = 'AnoCorrente';
+    let todasOS: any[] = [];
+    let paginaAtual = 0;
+    const qtdPorPagina = 50000;
+    let temMaisDados = true;
+    
+    // Buscar todas as páginas disponíveis (mesma estratégia do dashboard)
+    while (temMaisDados && paginaAtual < 10) {
+      try {
         const dadosPagina = await dataSource.osResumida({
           tipoManutencao: 'Todos',
           periodo: periodo,
@@ -89,410 +55,674 @@ os.get('/', async (req, res) => {
           dadosArray = (dadosPagina as any).Itens || (dadosPagina as any).data || (dadosPagina as any).items || [];
         }
         
+        console.log(`[os] Página ${paginaAtual}: ${dadosArray.length} OS encontradas na resposta da API`);
+        
         if (dadosArray.length === 0) {
+          console.log(`[os] Página ${paginaAtual} vazia, parando busca`);
           temMaisDados = false;
         } else {
-          osData = osData.concat(dadosArray);
-          // Se retornou menos que o solicitado, provavelmente é a última página
+          // Aplicar filtro de oficinas habilitadas (mesma lógica do dashboard)
+          const dadosArrayFiltrados = await filterOSByWorkshop(dadosArray);
+          console.log(`[os] Página ${paginaAtual}: ${dadosArrayFiltrados.length} OS após filtro de oficinas (de ${dadosArray.length})`);
+          todasOS = todasOS.concat(dadosArrayFiltrados);
+          
           if (dadosArray.length < qtdPorPagina) {
+            console.log(`[os] Página ${paginaAtual} tem menos que ${qtdPorPagina} itens, última página`);
             temMaisDados = false;
           } else {
             paginaAtual++;
           }
         }
-      }
-      
-      console.log(`[os] Total de OS retornadas da API: ${osData.length}`);
-
-      // Filtrar apenas OS do ano vigente
-      const anoInicio = new Date(currentYear, 0, 1);
-      const anoFim = new Date(currentYear, 11, 31, 23, 59, 59);
-      
-      osList = osData.filter((os: any) => {
-        // Filtrar apenas por ano
-        if (!os.Abertura || os.Abertura.trim() === '') return false;
-        try {
-          const dataAbertura = new Date(os.Abertura);
-          if (isNaN(dataAbertura.getTime())) return false;
-          return dataAbertura >= anoInicio && dataAbertura <= anoFim;
-        } catch {
-          return false;
+      } catch (pageError: any) {
+        console.error(`[os] Erro ao buscar página ${paginaAtual}:`, pageError?.message);
+        console.error(`[os] Stack:`, pageError?.stack);
+        // Se for a primeira página e der erro, retornar erro
+        if (paginaAtual === 0) {
+          throw pageError;
         }
-      });
-      
-      console.log(`[os] OS do ano vigente após filtro: ${osList.length}`);
-
-      // Aplicar filtro de oficinas habilitadas
-      osList = await filterOSByWorkshop(osList);
-      console.log(`[os] OS após filtro de oficinas habilitadas: ${osList.length}`);
-      
-      // Aplicar filtro de oficinas com classificação (excluir oficinas sem classificação)
-      osList = await filterOSByWorkshopClassification(osList);
-      console.log(`[os] OS após filtro de oficinas com classificação: ${osList.length}`);
-
-      // Log detalhado para debug
-      const oficinasEncontradas = [...new Set(osList.map((os: any) => os.Oficina))];
-      const situacoesEncontradas = [...new Set(osList.map((os: any) => os.SituacaoDaOS))];
-      const abertasDebug = osList.filter((os: any) => {
-        const situacao = (os.SituacaoDaOS || '').toString().trim();
-        return situacao.toLowerCase() === 'aberta';
-      }).length;
-      console.log('[os] OS encontradas (todas as oficinas):', osList.length);
-      console.log('[os] OS abertas:', abertasDebug);
-      console.log('[os] Oficinas encontradas:', oficinasEncontradas.slice(0, 10), '... (total:', oficinasEncontradas.length, ')');
-      console.log('[os] Situações encontradas:', situacoesEncontradas);
-
-      // Salvar no cache (apenas se não for mock)
-      if (!USE_MOCK && osList) {
-        await setCache(cacheKey, osList);
-        console.log('[os] Dados salvos no cache');
+        // Se não for a primeira página, parar a busca mas retornar o que já foi coletado
+        console.warn(`[os] Parando busca devido a erro na página ${paginaAtual}, retornando ${todasOS.length} OS já coletadas`);
+        temMaisDados = false;
       }
-    }
-
-    // Garantir que osList é um array válido
-    if (!osList || !Array.isArray(osList)) {
-      osList = [];
-    }
-
-    // Aplicar filtros se solicitados
-    let osListFiltrada = osList;
-    
-    // FILTRO OBRIGATÓRIO: Apenas ordens de serviço corretivas
-    const { isOSCorretiva } = await import('./dashboard');
-    osListFiltrada = [];
-    for (const os of osList) {
-      const isCorretiva = await isOSCorretiva(os);
-      if (isCorretiva) {
-        osListFiltrada.push(os);
-      }
-    }
-    console.log(`[os] OS após filtro de corretivas: ${osListFiltrada.length} de ${osList.length}`);
-    
-    // Função auxiliar para converter moeda brasileira para número (reutilizar da função de custo)
-    const parseBrazilianCurrency = (value: string): number => {
-      if (!value || value.trim() === '') return 0;
-      let cleaned = value.trim().replace(/\s/g, '').replace(/[^\d,.-]/g, '');
-      if (!cleaned || cleaned === '') return 0;
-      if (!cleaned.includes(',')) {
-        return parseFloat(cleaned) || 0;
-      }
-      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
-      return parseFloat(cleaned) || 0;
-    };
-    
-    // Filtro: apenas abertas
-    if (apenasAbertas) {
-      osListFiltrada = osListFiltrada.filter((os: any) => {
-        const situacao = (os.SituacaoDaOS || os.Situacao || '').toString().trim();
-        return situacao.toLowerCase() === 'aberta' || situacao.toLowerCase() === 'aberto' || situacao.toLowerCase() === 'em andamento';
-      });
-      console.log('[os] Filtro aplicado - apenas abertas:', osListFiltrada.length, 'de', osList.length);
     }
     
-    // Filtro: apenas com custo > 0
-    // Para isso, precisamos buscar os custos da API analítica completa
-    if (apenasComCusto) {
-      try {
-        const { getOSAnalitica } = await import('../sdk/effortSdk');
-        
-        // Buscar OS analítica para obter custos
-        let osAnaliticaData: any[] = [];
-        let paginaAtual = 0;
-        const qtdPorPagina = 50000;
-        let temMaisDados = true;
-        const maxPaginas = 5; // Limitar para não demorar muito
-        
-        while (temMaisDados && paginaAtual < maxPaginas) {
-          try {
-            const dadosPagina = await getOSAnalitica({
-              tipoManutencao: 'Todos',
-              periodo: 'AnoCorrente',
-              pagina: paginaAtual,
-              qtdPorPagina: qtdPorPagina,
-            });
-            
-            let dadosArray: any[] = [];
-            if (Array.isArray(dadosPagina)) {
-              dadosArray = dadosPagina;
-            } else if (dadosPagina?.Itens && Array.isArray(dadosPagina.Itens)) {
-              dadosArray = dadosPagina.Itens;
-            } else if (dadosPagina?.data && Array.isArray(dadosPagina.data)) {
-              dadosArray = dadosPagina.data;
-            } else if (dadosPagina?.items && Array.isArray(dadosPagina.items)) {
-              dadosArray = dadosPagina.items;
-            }
-            
-            if (dadosArray.length === 0) {
-              temMaisDados = false;
-            } else {
-              osAnaliticaData = osAnaliticaData.concat(dadosArray);
-              if (dadosArray.length < qtdPorPagina) {
-                temMaisDados = false;
-              } else {
-                paginaAtual++;
-              }
-            }
-          } catch (err: any) {
-            console.warn('[os] Erro ao buscar OS analítica para filtro de custo:', err?.message);
-            temMaisDados = false;
-          }
-        }
-        
-        // Criar Set com CodigoSerialOS das OS que têm custo > 0
-        const osComCustoSet = new Set<number>();
-        osAnaliticaData.forEach((os: any) => {
-          const custo = os.Custo || '0';
-          const valorCusto = parseBrazilianCurrency(custo);
-          if (valorCusto > 0) {
-            osComCustoSet.add(os.CodigoSerialOS);
-          }
-        });
-        
-        // Filtrar apenas OS que estão no Set
-        osListFiltrada = osListFiltrada.filter((os: any) => {
-          return osComCustoSet.has(os.CodigoSerialOS);
-        });
-        
-        console.log('[os] Filtro aplicado - apenas com custo > 0:', osListFiltrada.length, 'de', osList.length);
-        console.log('[os] Total de OS com custo encontradas:', osComCustoSet.size);
-      } catch (error: any) {
-        console.warn('[os] Erro ao aplicar filtro de custo:', error?.message);
-        // Em caso de erro, não aplicar o filtro
-      }
-    }
-
-    // Função auxiliar para obter SetorId da OS
-    const getOSSectorId = (os: any): number | null => {
-      if (os.SetorId !== undefined) return os.SetorId;
-      if (os.Setor) {
-        const sectorNameToIdMap: Record<string, number> = {
-          'UTI 1': 1, 'UTI 2': 2, 'UTI 3': 3, 'Emergência': 4,
-          'Centro Cirúrgico': 5, 'Radiologia': 6, 'Cardiologia': 7,
-          'Neurologia': 8, 'Ortopedia': 9, 'Pediatria': 10,
-          'Maternidade': 11, 'Ambulatório': 12,
-        };
-        if (sectorNameToIdMap[os.Setor]) return sectorNameToIdMap[os.Setor];
-        let hash = 0;
-        for (let i = 0; i < os.Setor.length; i++) {
-          hash = ((hash << 5) - hash) + os.Setor.charCodeAt(i);
-          hash = hash & hash;
-        }
-        return Math.abs(hash % 999) + 1;
-      }
-      return null;
-    };
-
-    // Filtro: por setores (se fornecido)
-    if (setoresFilter && setoresFilter.length > 0) {
-      osListFiltrada = osListFiltrada.filter((os: any) => {
-        const sectorId = getOSSectorId(os);
-        return sectorId !== null && setoresFilter.includes(sectorId);
-      });
-      console.log('[os] Filtro aplicado - setores:', setoresFilter, '- Resultado:', osListFiltrada.length);
-    }
-
-    const total = osListFiltrada.length;
-
-    // Aplicar paginação
-    const paginatedData = osListFiltrada.slice(skip, skip + pageSize);
-    const totalPages = Math.ceil(total / pageSize);
-
-    // Contar OS abertas e fechadas (verificar diferentes variações de status)
-    const abertas = osList.filter((os: any) => {
-      const situacao = (os.SituacaoDaOS || os.Situacao || '').toString().trim();
-      return situacao.toLowerCase() === 'aberta' || situacao.toLowerCase() === 'aberto' || situacao.toLowerCase() === 'em andamento';
-    }).length;
+    console.log(`[os] Total de OS coletadas após filtros: ${todasOS.length}`);
     
-    const fechadas = osList.filter((os: any) => {
-      const situacao = (os.SituacaoDaOS || os.Situacao || '').toString().trim();
-      return situacao.toLowerCase() === 'fechada' || situacao.toLowerCase() === 'fechado' || situacao.toLowerCase() === 'concluída' || situacao.toLowerCase() === 'concluida';
-    }).length;
-
-    // Calcular custo total das OS do ano vigente
-    // Tentar usar endpoint de OS analítica completa que pode ter campo de custo
-    let custoTotal = 0;
-    try {
-      // Tentar buscar da API analítica completa (não resumida) que pode ter custos
-      const { getOSAnalitica } = await import('../sdk/effortSdk');
-      
-      // Função auxiliar para converter moeda brasileira para número
-      // Lida com valores como "               0,00" (com espaços)
-      const parseBrazilianCurrency = (value: string): number => {
-        if (!value || value.trim() === '') return 0;
-        // Remove todos os espaços primeiro, depois remove caracteres não numéricos exceto vírgula e ponto
-        let cleaned = value.trim().replace(/\s/g, '').replace(/[^\d,.-]/g, '');
-        if (!cleaned || cleaned === '') return 0;
-        if (!cleaned.includes(',')) {
-          return parseFloat(cleaned) || 0;
-        }
-        // Remove pontos (separador de milhar) e substitui vírgula por ponto (separador decimal)
-        cleaned = cleaned.replace(/\./g, '').replace(',', '.');
-        return parseFloat(cleaned) || 0;
-      };
-      
-      // Buscar todas as OS do ano vigente usando endpoint analítico completo
-      let osAnaliticaData: any[] = [];
-      let paginaAtual = 0;
-      const qtdPorPagina = 50000;
-      let temMaisDados = true;
-      const maxPaginas = 20; // Aumentar limite de páginas
-      let totalBuscado = 0;
-      let errosConsecutivos = 0;
-      const maxErrosConsecutivos = 3;
-      
-      console.log('[os] Iniciando busca de OS analítica para cálculo de custos...');
-      
-      while (temMaisDados && paginaAtual < maxPaginas && errosConsecutivos < maxErrosConsecutivos) {
-        try {
-          console.log(`[os] Buscando página ${paginaAtual} de OS analítica...`);
-          const dadosPagina = await getOSAnalitica({
-            tipoManutencao: 'Todos',
-            periodo: 'AnoCorrente',
-            pagina: paginaAtual,
-            qtdPorPagina: qtdPorPagina,
-          });
-          
-          let dadosArray: any[] = [];
-          if (Array.isArray(dadosPagina)) {
-            dadosArray = dadosPagina;
-          } else if (dadosPagina?.Itens && Array.isArray(dadosPagina.Itens)) {
-            dadosArray = dadosPagina.Itens;
-          } else if (dadosPagina?.data && Array.isArray(dadosPagina.data)) {
-            dadosArray = dadosPagina.data;
-          } else if (dadosPagina?.items && Array.isArray(dadosPagina.items)) {
-            dadosArray = dadosPagina.items;
-          }
-          
-          if (dadosArray.length === 0) {
-            console.log(`[os] Página ${paginaAtual} retornou 0 resultados, finalizando busca`);
-            temMaisDados = false;
-          } else {
-            osAnaliticaData = osAnaliticaData.concat(dadosArray);
-            totalBuscado += dadosArray.length;
-            console.log(`[os] Página ${paginaAtual}: ${dadosArray.length} OS retornadas (total acumulado: ${totalBuscado})`);
-            
-            // Se retornou menos que o solicitado, provavelmente é a última página
-            if (dadosArray.length < qtdPorPagina) {
-              console.log(`[os] Última página detectada (retornou ${dadosArray.length} < ${qtdPorPagina})`);
-              temMaisDados = false;
-            } else {
-              paginaAtual++;
-              errosConsecutivos = 0; // Reset contador de erros em caso de sucesso
-            }
-          }
-        } catch (err: any) {
-          errosConsecutivos++;
-          console.warn(`[os] Erro ao buscar OS analítica (página ${paginaAtual}, erro ${errosConsecutivos}/${maxErrosConsecutivos}):`, err?.message);
-          if (errosConsecutivos >= maxErrosConsecutivos) {
-            console.error('[os] Muitos erros consecutivos, interrompendo busca');
-            break;
-          }
-          // Tentar próxima página mesmo com erro
-          paginaAtual++;
-        }
-      }
-      
-      console.log('[os] Total de OS analítica retornadas:', osAnaliticaData.length);
-      
-      // Filtrar apenas OS do ano vigente e somar custos
-      const anoInicio = new Date(currentYear, 0, 1);
-      const anoFim = new Date(currentYear, 11, 31, 23, 59, 59);
-      
-      let osComCusto = 0;
-      let osSemCusto = 0;
-      let osForaDoAno = 0;
-      let custosInvalidos = 0;
-      
-      osAnaliticaData.forEach((os: any) => {
-        // Verificar se é do ano vigente
-        if (!os.Abertura || os.Abertura.trim() === '') {
-          osForaDoAno++;
-          return;
-        }
-        
-        try {
-          const dataAbertura = new Date(os.Abertura);
-          if (isNaN(dataAbertura.getTime())) {
-            osForaDoAno++;
-            return;
-          }
-          if (dataAbertura < anoInicio || dataAbertura > anoFim) {
-            osForaDoAno++;
-            return;
-          }
-        } catch {
-          osForaDoAno++;
-          return;
-        }
-        
-        // Tentar diferentes campos possíveis para custo
-        const custo = os.Custo || os.Valor || os.ValorTotal || os.CustoTotal || os.CustoDaOS || os.ValorDaOS || os.CustoOS || os.ValorOS || '0';
-        const valorCusto = parseBrazilianCurrency(custo);
-        
-        if (valorCusto > 0) {
-          custoTotal += valorCusto;
-          osComCusto++;
-        } else {
-          osSemCusto++;
-          // Log alguns exemplos de OS sem custo para debug
-          if (osSemCusto <= 5) {
-            console.log(`[os] Exemplo OS sem custo: OS=${os.OS}, Custo="${custo}"`);
-          }
-        }
-      });
-      
-      console.log('[os] Estatísticas de custos:');
-      console.log(`[os] - OS com custo > 0: ${osComCusto}`);
-      console.log(`[os] - OS com custo = 0: ${osSemCusto}`);
-      console.log(`[os] - OS fora do ano vigente: ${osForaDoAno}`);
-      console.log(`[os] - Custo total calculado: R$ ${custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-      
-      // Se ainda estiver muito baixo, tentar método alternativo como validação
-      if (custoTotal < 100000 && osComCusto > 0) {
-        console.warn('[os] Custo total parece baixo para o número de OS com custo. Verificando método alternativo...');
-        try {
-          const { calculateMaintenanceCostIndicator } = await import('../services/maintenanceCostService');
-          const indicator = await calculateMaintenanceCostIndicator(currentYear, []);
-          console.log('[os] Custo via calculateMaintenanceCostIndicator (validação):', indicator.valorOS);
-          // Não substituir, apenas logar para comparação
-        } catch (altError: any) {
-          console.warn('[os] Erro ao validar com método alternativo:', altError?.message);
-        }
-      }
-    } catch (error: any) {
-      console.error('[os] Erro ao calcular custo:', error?.message);
-      console.error('[os] Stack:', error?.stack);
-      custoTotal = 0;
-    }
-
-    console.log('[os] Retornando', paginatedData.length, 'de', total, 'OS (página', page, 'de', totalPages, ')');
-    console.log('[os] Estatísticas - Total:', total, 'Abertas:', abertas, 'Fechadas:', fechadas);
-    console.log('[os] Custo total das OS:', custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-    
-    res.json({
-      data: paginatedData,
-      pagination: {
+    // Se não encontrou nenhuma OS, retornar resposta vazia mas válida
+    if (todasOS.length === 0) {
+      console.warn('[os] Nenhuma OS encontrada após buscar da API e aplicar filtros');
+      return res.json({
+        items: [],
         page,
         pageSize,
-        total,
-        totalPages,
-        hasNext: page < totalPages,
-        hasPrev: page > 1,
-      },
+        totalItems: 0,
+        totalPages: 0,
+        statistics: {
+          total: 0,
+          abertas: 0,
+          fechadas: 0,
+          custoTotal: 0,
+        },
+      });
+    }
+    
+    // Aplicar paginação client-side
+    const inicio = (page - 1) * pageSize;
+    const fim = inicio + pageSize;
+    const osList = todasOS.slice(inicio, fim);
+    
+    // Calcular estatísticas usando a mesma lógica do dashboard
+    const osAbertas = (await Promise.all(
+      todasOS.map(async (os: any) => ({
+        os,
+        isValid: await isOSInMaintenanceList(os),
+      }))
+    )).filter(item => item.isValid).map(item => item.os);
+    
+    const total = todasOS.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const abertas = osAbertas.length;
+    const fechadas = total - abertas;
+    const custoTotal = 0;
+    
+    console.log('[os] Retornando:', {
+      items: osList.length,
+      total,
+      totalPages,
+      page,
+      pageSize,
+      abertas,
+      fechadas,
+    });
+    
+    // Retornar no formato esperado: { items, page, pageSize, totalItems, totalPages }
+    res.json({
+      items: osList,
+      page,
+      pageSize,
+      totalItems: total,
+      totalPages,
       statistics: {
         total,
         abertas,
         fechadas,
         custoTotal,
-        anoVigente: currentYear,
       },
     });
   } catch (e: any) {
     console.error('[os] Erro:', e?.message);
     console.error('[os] Stack:', e?.stack);
-    const errorMessage = e?.response?.data?.message || e?.message || 'Erro desconhecido ao buscar ordens de serviço';
-    const statusCode = e?.response?.status || 500;
-    res.status(statusCode).json({ error: true, message: errorMessage });
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao buscar ordens de serviço' });
   }
 });
 
+// GET /api/ecm/os/analitica - Listar OS analíticas completas (com Tag para vínculo com equipamentos)
+os.get('/analitica', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    // Parâmetros de filtro
+    const periodo = (req.query.periodo as string) || 'AnoCorrente';
+    const tipoManutencao = (req.query.tipoManutencao as string) || 'Todos';
+    
+    console.log('[os/analitica] Buscando OS analíticas completas (com Tag)...');
+    console.log('[os/analitica] Filtros:', { periodo, tipoManutencao });
+
+    const { dataSource } = await import('../adapters/dataSource');
+    
+    // Buscar OS analíticas completas (não resumidas) que contêm Tag
+    let osArray: any[] = [];
+    try {
+      const osAnalitica = await dataSource.osAnalitica({
+        tipoManutencao: tipoManutencao as any,
+        periodo: periodo as any,
+        pagina: 0,
+        qtdPorPagina: 50000,
+      });
+
+      osArray = Array.isArray(osAnalitica)
+        ? osAnalitica
+        : (osAnalitica as any)?.Itens || (osAnalitica as any)?.data || [];
+      
+      console.log(`[os/analitica] ${osArray.length} OS analíticas carregadas (com Tag)`);
+      
+      // Aplicar filtro de oficinas habilitadas
+      osArray = await filterOSByWorkshop(osArray);
+      
+      // Log de exemplo para verificar se Tag está presente
+      if (osArray.length > 0) {
+        const primeiraOS = osArray[0];
+        console.log(`[os/analitica] Exemplo de OS analítica:`, {
+          OS: primeiraOS.OS,
+          Tag: primeiraOS.Tag || '(sem Tag)',
+          EquipamentoId: primeiraOS.EquipamentoId || '(sem EquipamentoId)',
+          SituacaoDaOS: primeiraOS.SituacaoDaOS,
+          temTag: !!primeiraOS.Tag,
+        });
+      }
+    } catch (error: any) {
+      console.error('[os/analitica] Erro ao buscar OS analíticas:', error);
+      // Tentar fallback para API resumida (mas não teremos Tag)
+      console.warn('[os/analitica] Tentando fallback para API resumida (sem Tag)...');
+      try {
+        const osResumida = await dataSource.osResumida({
+          tipoManutencao: tipoManutencao as any,
+          periodo: periodo as any,
+          pagina: 0,
+          qtdPorPagina: 50000,
+        });
+        osArray = Array.isArray(osResumida)
+          ? osResumida
+          : (osResumida as any)?.Itens || (osResumida as any)?.data || [];
+        osArray = await filterOSByWorkshop(osArray);
+        console.warn(`[os/analitica] ⚠️ Usando API resumida (${osArray.length} OS) - Tags NÃO estarão disponíveis`);
+      } catch (fallbackError: any) {
+        console.error('[os/analitica] Erro no fallback para API resumida:', fallbackError);
+        osArray = [];
+      }
+    }
+    
+    res.json({
+      items: osArray,
+      totalItems: osArray.length,
+      hasTags: osArray.length > 0 && !!osArray[0]?.Tag,
+    });
+  } catch (e: any) {
+    console.error('[os/analitica] Erro:', e?.message);
+    console.error('[os/analitica] Stack:', e?.stack);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao buscar OS analíticas completas' });
+  }
+});
+
+// GET /api/ecm/os/tempo-medio-processamento - Tempo médio de processamento por ano
+os.get('/tempo-medio-processamento', async (req, res) => {
+  try {
+    console.log('[os/tempo-medio-processamento] Endpoint simplificado - retornando dados vazios');
+    
+    // Retornar dados vazios por enquanto - lógica complexa removida
+    res.json({
+      dados: [],
+      periodo: { inicio: 2024, fim: new Date().getFullYear() },
+    });
+  } catch (e: any) {
+    console.error('[os/tempo-medio-processamento] Erro:', e?.message);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao calcular tempo médio de processamento' });
+  }
+});
+
+// GET /api/ecm/os/equipamentos-com-os-abertas - Listar equipamentos que possuem OS abertas
+os.get('/equipamentos-com-os-abertas', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 20;
+    
+    // Filtro de setores (array de IDs de setores) - para personificação
+    const setoresFilter = req.query.setores 
+      ? (req.query.setores as string).split(',').map(s => parseInt(s.trim())).filter(Boolean)
+      : null;
+    
+    console.log('[os/equipamentos-com-os-abertas] Buscando usando lógica do dashboard...');
+    console.log('[os/equipamentos-com-os-abertas] Filtro de setores:', setoresFilter);
+    
+    const { dataSource } = await import('../adapters/dataSource');
+    const { getSectorIdFromItem } = await import('../utils/sectorMapping');
+    
+    // Buscar equipamentos (mesma lógica do dashboard)
+    const equipamentosRaw = await dataSource.equipamentos({
+      apenasAtivos: true,
+      incluirComponentes: false,
+      incluirCustoSubstituicao: false,
+    });
+    
+    // Garantir que equipamentos é um array (mesma lógica do inventário)
+    let equipamentos = Array.isArray(equipamentosRaw) 
+      ? equipamentosRaw 
+      : (equipamentosRaw as any)?.Itens || (equipamentosRaw as any)?.data || (equipamentosRaw as any)?.items || [];
+    
+    console.log('[os/equipamentos-com-os-abertas] Equipamentos carregados:', equipamentos.length);
+    
+    // Filtrar por setores se fornecido - mesma lógica do inventário
+    if (setoresFilter && setoresFilter.length > 0) {
+      // Buscar nomes dos setores usando SectorMapping do banco (mesma lógica do inventário)
+      let sectorNamesToMatch: string[] = [];
+      try {
+        const { getPrisma } = await import('../services/prismaService');
+        const prismaClient = await getPrisma();
+        if (prismaClient) {
+          const sectorMappings = await prismaClient.sectorMapping.findMany({
+            where: {
+              systemSectorId: { in: setoresFilter },
+              active: true,
+            },
+          });
+          
+          // Criar lista com todos os nomes de setores (effortSectorName prioritário)
+          sectorMappings.forEach((mapping) => {
+            if (mapping.effortSectorName) {
+              sectorNamesToMatch.push(mapping.effortSectorName);
+            }
+            if (mapping.systemSectorName && mapping.systemSectorName !== mapping.effortSectorName) {
+              sectorNamesToMatch.push(mapping.systemSectorName);
+            }
+          });
+        }
+        
+        // Se não encontrou mapeamento no banco, buscar nomes dos setores da API de investimentos
+        if (sectorNamesToMatch.length === 0) {
+          try {
+            const sectorsRes = await fetch(`${req.protocol}://${req.get('host')}/api/ecm/investments/sectors/list`);
+            if (sectorsRes.ok) {
+              const sectorsData = await sectorsRes.json();
+              const sectorsFromApi = sectorsData.sectors
+                ?.filter((s: any) => setoresFilter.includes(s.id))
+                .map((s: any) => s.name) || [];
+              
+              sectorNamesToMatch = sectorsFromApi;
+            }
+          } catch (apiError: any) {
+            console.warn('[os/equipamentos-com-os-abertas] Erro ao buscar setores da API:', apiError?.message);
+          }
+        }
+      } catch (error: any) {
+        console.warn('[os/equipamentos-com-os-abertas] Erro ao buscar mapeamento de setores:', error?.message);
+      }
+      
+      // Função auxiliar para normalizar string (remove acentos, espaços extras)
+      const normalizarString = (str: string): string => {
+        return str
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+          .replace(/\s+/g, ' ') // Normaliza espaços
+          .trim();
+      };
+      
+      // Guardar quantidade antes do filtro para debug
+      const equipamentosAntesFiltro = equipamentos.length;
+      
+      // Usar utilitário getSectorIdFromItem como fallback
+      equipamentos = equipamentos.filter((eq: any) => {
+        const eqSetor = eq.Setor || '';
+        
+        // Se temos mapeamento do banco, usar comparação flexível por nome do setor
+        if (sectorNamesToMatch.length > 0) {
+          const eqSetorNormalizado = normalizarString(eqSetor);
+          for (const sectorName of sectorNamesToMatch) {
+            const sectorNameNormalizado = normalizarString(sectorName);
+            
+            // Comparação exata
+            if (eqSetorNormalizado === sectorNameNormalizado) {
+              return true;
+            }
+            
+            // Verificar se o nome do setor está contido no setor do equipamento
+            if (eqSetorNormalizado.includes(sectorNameNormalizado) || sectorNameNormalizado.includes(eqSetorNormalizado)) {
+              return true;
+            }
+            
+            // Verificar palavras principais (para nomes compostos)
+            const palavrasSetor = sectorNameNormalizado.split(/\s+/).filter(w => w.length >= 3);
+            if (palavrasSetor.length >= 2) {
+              const palavrasCoincidentes = palavrasSetor.filter(palavra => eqSetorNormalizado.includes(palavra));
+              if (palavrasCoincidentes.length >= 2) {
+                return true;
+              }
+            }
+          }
+        }
+        
+        // Fallback: usar SetorId do equipamento ou converter nome para ID
+        const sectorId = getSectorIdFromItem(eq);
+        if (!sectorId) return false;
+        return setoresFilter.includes(sectorId);
+      });
+      
+      console.log('[os/equipamentos-com-os-abertas] Filtro de setores (IDs):', setoresFilter);
+      console.log('[os/equipamentos-com-os-abertas] Nomes de setores para filtrar:', sectorNamesToMatch);
+      console.log('[os/equipamentos-com-os-abertas] Equipamentos antes do filtro:', equipamentosAntesFiltro);
+      console.log('[os/equipamentos-com-os-abertas] Equipamentos após filtro de setores:', equipamentos.length);
+      
+      // Debug: mostrar alguns exemplos de setores encontrados nos equipamentos
+      if (equipamentos.length === 0 && equipamentosAntesFiltro > 0) {
+        const equipamentosAntes = Array.isArray(equipamentosRaw) 
+          ? equipamentosRaw 
+          : (equipamentosRaw as any)?.Itens || (equipamentosRaw as any)?.data || (equipamentosRaw as any)?.items || [];
+        const setoresEncontrados = new Set(equipamentosAntes.slice(0, 50).map((eq: any) => eq.Setor || '').filter((s: string) => s));
+        console.log('[os/equipamentos-com-os-abertas] Exemplos de setores encontrados nos equipamentos (primeiros 50):', Array.from(setoresEncontrados).slice(0, 10));
+      }
+    } else {
+      console.log('[os/equipamentos-com-os-abertas] Sem filtro de setores, usando todos os equipamentos:', equipamentos.length);
+    }
+
+    // Buscar OS abertas do ano corrente - APENAS CORRETIVAS (mesma lógica do dashboard)
+    const periodo = 'AnoCorrente';
+    
+    let osAbertas: any[] = [];
+    let paginaAtual = 0;
+    const qtdPorPagina = 50000;
+    let temMaisDados = true;
+    
+    while (temMaisDados && paginaAtual < 10) {
+      const dadosPagina = await dataSource.osResumida({
+        tipoManutencao: 'Todos',
+        periodo: periodo,
+        pagina: paginaAtual,
+        qtdPorPagina: qtdPorPagina,
+      });
+      
+      let dadosArray: any[] = [];
+      if (Array.isArray(dadosPagina)) {
+        dadosArray = dadosPagina;
+      } else if (dadosPagina && typeof dadosPagina === 'object') {
+        dadosArray = (dadosPagina as any).Itens || (dadosPagina as any).data || (dadosPagina as any).items || [];
+      }
+      
+      if (dadosArray.length === 0) {
+        temMaisDados = false;
+      } else {
+        // Aplicar filtro de oficinas habilitadas primeiro
+        const dadosArrayFiltrados = await filterOSByWorkshop(dadosArray);
+        
+        // Filtrar APENAS OS corretivas abertas (não canceladas) - apenas corretivas para a lista
+        const osAbertasPagina = (await Promise.all(
+          dadosArrayFiltrados.map(async (os: any) => ({
+            os,
+            isValid: await isOSInMaintenanceList(os),
+          }))
+        )).filter(item => item.isValid).map(item => item.os);
+        
+        console.log(`[os/equipamentos-com-os-abertas] Página ${paginaAtual}: ${osAbertasPagina.length} OS corretivas de ${dadosArray.length} total`);
+        
+        osAbertas = osAbertas.concat(osAbertasPagina);
+        
+        if (dadosArray.length < qtdPorPagina) {
+          temMaisDados = false;
+        } else {
+          paginaAtual++;
+        }
+      }
+    }
+
+    console.log('[os/equipamentos-com-os-abertas] Total de OS abertas encontradas:', osAbertas.length);
+    
+    // Criar mapas para facilitar busca de equipamentos
+    const tagToIdMap = new Map<string, number>();
+    const nomeToIdMap = new Map<string, number>();
+    const equipamentoMap = new Map<number, any>();
+    
+    equipamentos.forEach((eq: any) => {
+      if (eq.Tag) tagToIdMap.set(eq.Tag.trim().toUpperCase(), eq.Id);
+      if (eq.Equipamento) nomeToIdMap.set(eq.Equipamento.trim().toUpperCase(), eq.Id);
+      equipamentoMap.set(eq.Id, eq);
+    });
+    
+    console.log('[os/equipamentos-com-os-abertas] Equipamentos no mapa:', equipamentoMap.size);
+    console.log('[os/equipamentos-com-os-abertas] Tags no mapa:', tagToIdMap.size);
+
+    // Agrupar OS por equipamento
+    const equipamentosComOS = new Map<number, {
+      equipamento: any;
+      osList: any[];
+      primeiraOS: any;
+      totalOS: number;
+    }>();
+    
+    let osVinculadas = 0;
+    let osNaoVinculadas = 0;
+    
+    osAbertas.forEach((os: any) => {
+      let equipamentoId: number | undefined;
+      
+      // Prioridade 1: EquipamentoId direto
+      if (os.EquipamentoId) {
+        equipamentoId = os.EquipamentoId;
+      }
+      // Prioridade 2: Tag (mais confiável)
+      else if (os.Tag) {
+        const tagNormalizada = os.Tag.trim().toUpperCase();
+        equipamentoId = tagToIdMap.get(tagNormalizada);
+      }
+      // Prioridade 3: Nome do equipamento
+      else if (os.Equipamento) {
+        const nomeNormalizado = os.Equipamento.trim().toUpperCase();
+        equipamentoId = nomeToIdMap.get(nomeNormalizado);
+      }
+      
+      if (equipamentoId && equipamentoMap.has(equipamentoId)) {
+        osVinculadas++;
+        if (!equipamentosComOS.has(equipamentoId)) {
+          equipamentosComOS.set(equipamentoId, {
+            equipamento: equipamentoMap.get(equipamentoId),
+            osList: [],
+            primeiraOS: os,
+            totalOS: 0,
+          });
+        }
+        
+        const entry = equipamentosComOS.get(equipamentoId)!;
+        entry.osList.push(os);
+        entry.totalOS = entry.osList.length;
+        
+        // Manter a OS mais antiga como primeiraOS
+        const dataAberturaAtual = new Date(entry.primeiraOS.Abertura || entry.primeiraOS.DataAbertura || '9999-12-31');
+        const dataAberturaNova = new Date(os.Abertura || os.DataAbertura || '9999-12-31');
+        if (dataAberturaNova < dataAberturaAtual) {
+          entry.primeiraOS = os;
+        }
+      } else {
+        osNaoVinculadas++;
+      }
+    });
+    
+    console.log('[os/equipamentos-com-os-abertas] OS vinculadas a equipamentos filtrados:', osVinculadas);
+    console.log('[os/equipamentos-com-os-abertas] OS não vinculadas:', osNaoVinculadas);
+    console.log('[os/equipamentos-com-os-abertas] Equipamentos com OS:', equipamentosComOS.size);
+
+    // Converter para array e ordenar por data de abertura da primeira OS (mais antiga primeiro)
+    const equipamentosEmManutencao = Array.from(equipamentosComOS.values())
+      .map((entry) => ({
+        equipamentoId: entry.equipamento.Id,
+        tag: entry.equipamento.Tag || 'N/A',
+        equipamento: entry.equipamento.Equipamento || 'Sem nome',
+        modelo: entry.equipamento.Modelo || '-',
+        fabricante: entry.equipamento.Fabricante || '-',
+        setor: entry.equipamento.Setor || 'Não informado',
+        osAbertas: entry.osList,
+        quantidadeOSAbertas: entry.totalOS,
+        primeiraOSAbertura: entry.primeiraOS.Abertura || entry.primeiraOS.DataAbertura || null,
+        ultimaOSAbertura: entry.osList[entry.osList.length - 1]?.Abertura || entry.osList[entry.osList.length - 1]?.DataAbertura || null,
+      }))
+      .sort((a, b) => {
+        const dataA = a.primeiraOSAbertura ? new Date(a.primeiraOSAbertura).getTime() : 0;
+        const dataB = b.primeiraOSAbertura ? new Date(b.primeiraOSAbertura).getTime() : 0;
+        return dataA - dataB; // Mais antiga primeiro
+      })
+      .slice(0, limit); // Limitar resultados
+
+    // Contar apenas OS vinculadas a equipamentos
+    const totalOSAbertasVinculadas = Array.from(equipamentosComOS.values()).reduce(
+      (acc, entry) => acc + entry.osList.length,
+      0
+    );
+
+    const hoje = new Date();
+    const resultado = {
+      equipamentos: equipamentosEmManutencao,
+      totalEquipamentos: equipamentosEmManutencao.length,
+      totalOSAbertas: totalOSAbertasVinculadas, // Apenas OS vinculadas a equipamentos
+      periodo: { inicio: '2024-01-01', fim: hoje.toISOString().split('T')[0] },
+      limitado: false,
+    };
+    
+    console.log(`[os/equipamentos-com-os-abertas] Retornando ${equipamentosEmManutencao.length} equipamentos com ${osAbertas.length} OS abertas`);
+    
+    res.json(resultado);
+  } catch (e: any) {
+    console.error('[os/equipamentos-com-os-abertas] Erro:', e?.message);
+    console.error('[os/equipamentos-com-os-abertas] Stack:', e?.stack);
+    res.status(500).json({ 
+      error: true, 
+      message: e?.message || 'Erro ao buscar equipamentos com OS abertas'
+    });
+  }
+});
+
+// GET /api/ecm/os/:codigoSerialOS - Buscar dados da OS (comentários e vínculo com solicitação de compra)
+os.get('/:codigoSerialOS', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const codigoSerialOS = parseInt(req.params.codigoSerialOS);
+    
+    if (isNaN(codigoSerialOS)) {
+      return res.status(400).json({ error: true, message: 'Código serial da OS inválido' });
+    }
+
+    if (USE_MOCK) {
+      // Em modo mock, retornar estrutura vazia
+      return res.json({
+        codigoSerialOS,
+        comentarios: null,
+        purchaseRequestId: null,
+        purchaseRequest: null,
+      });
+    }
+
+    const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+    }
+
+    const serviceOrder = await prismaClient.serviceOrder.findUnique({
+      where: { codigoSerialOS },
+      include: {
+        purchaseRequest: {
+          select: {
+            id: true,
+            description: true,
+            status: true,
+            sectorId: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!serviceOrder) {
+      // Se não existe, retornar estrutura vazia
+      return res.json({
+        codigoSerialOS,
+        comentarios: null,
+        purchaseRequestId: null,
+        purchaseRequest: null,
+      });
+    }
+
+    res.json({
+      codigoSerialOS: serviceOrder.codigoSerialOS,
+      osCodigo: serviceOrder.osCodigo,
+      comentarios: serviceOrder.comentarios,
+      purchaseRequestId: serviceOrder.purchaseRequestId,
+      purchaseRequest: serviceOrder.purchaseRequest,
+      createdAt: serviceOrder.createdAt.toISOString(),
+      updatedAt: serviceOrder.updatedAt.toISOString(),
+    });
+  } catch (e: any) {
+    console.error('[os/:codigoSerialOS] Erro:', e?.message);
+    console.error('[os/:codigoSerialOS] Stack:', e?.stack);
+    res.status(500).json({ 
+      error: true, 
+      message: e?.message || 'Erro ao buscar dados da OS'
+    });
+  }
+});
+
+// PATCH /api/ecm/os/:codigoSerialOS - Atualizar comentários e vínculo com solicitação de compra
+os.patch('/:codigoSerialOS', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: true, message: 'Não autenticado' });
+    }
+
+    const codigoSerialOS = parseInt(req.params.codigoSerialOS);
+    
+    if (isNaN(codigoSerialOS)) {
+      return res.status(400).json({ error: true, message: 'Código serial da OS inválido' });
+    }
+
+    const { comentarios, purchaseRequestId, osCodigo } = req.body;
+
+    if (USE_MOCK) {
+      // Em modo mock, retornar sucesso
+      return res.json({
+        codigoSerialOS,
+        comentarios: comentarios || null,
+        purchaseRequestId: purchaseRequestId || null,
+        osCodigo: osCodigo || null,
+        message: 'Dados atualizados com sucesso (modo mock)',
+      });
+    }
+
+    const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+    }
+
+    // Verificar se purchaseRequestId existe (se fornecido)
+    if (purchaseRequestId) {
+      const purchaseRequest = await prismaClient.purchaseRequest.findUnique({
+        where: { id: purchaseRequestId },
+      });
+      
+      if (!purchaseRequest) {
+        return res.status(404).json({ 
+          error: true, 
+          message: 'Solicitação de compra não encontrada' 
+        });
+      }
+    }
+
+    // Upsert: criar se não existe, atualizar se existe
+    const serviceOrder = await prismaClient.serviceOrder.upsert({
+      where: { codigoSerialOS },
+      update: {
+        comentarios: comentarios !== undefined ? comentarios : undefined,
+        purchaseRequestId: purchaseRequestId !== undefined ? purchaseRequestId : undefined,
+        osCodigo: osCodigo !== undefined ? osCodigo : undefined,
+        createdBy: req.user.id,
+        updatedAt: new Date(),
+      },
+      create: {
+        codigoSerialOS,
+        osCodigo: osCodigo || null,
+        comentarios: comentarios || null,
+        purchaseRequestId: purchaseRequestId || null,
+        createdBy: req.user.id,
+      },
+      include: {
+        purchaseRequest: {
+          select: {
+            id: true,
+            description: true,
+            status: true,
+            sectorId: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      codigoSerialOS: serviceOrder.codigoSerialOS,
+      osCodigo: serviceOrder.osCodigo,
+      comentarios: serviceOrder.comentarios,
+      purchaseRequestId: serviceOrder.purchaseRequestId,
+      purchaseRequest: serviceOrder.purchaseRequest,
+      createdAt: serviceOrder.createdAt.toISOString(),
+      updatedAt: serviceOrder.updatedAt.toISOString(),
+      message: 'Dados atualizados com sucesso',
+    });
+  } catch (e: any) {
+    console.error('[os/:codigoSerialOS PATCH] Erro:', e?.message);
+    console.error('[os/:codigoSerialOS PATCH] Stack:', e?.stack);
+    res.status(500).json({ 
+      error: true, 
+      message: e?.message || 'Erro ao atualizar dados da OS'
+    });
+  }
+});

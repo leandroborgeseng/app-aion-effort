@@ -4,17 +4,10 @@ import { calcKpisCriticosMes } from '../services/kpiService';
 import { getCache, setCache, generateCacheKey } from '../services/cacheService';
 import fs from 'node:fs/promises';
 
+import { getPrisma } from '../services/prismaService';
+
 const USE_MOCK = process.env.USE_MOCK === 'true';
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutos
-
-let prisma: any = null;
-async function getPrisma() {
-  if (!prisma && !USE_MOCK) {
-    const { PrismaClient } = await import('@prisma/client');
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
 
 async function readFlags(): Promise<{
   criticalFlags: Record<string, boolean>;

@@ -1,14 +1,5 @@
 // src/services/cacheService.ts
-import { PrismaClient } from '@prisma/client';
-
-let prisma: PrismaClient | null = null;
-
-async function getPrisma() {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
+import { getPrisma } from './prismaService';
 
 /**
  * TTL padrão para cache (em milissegundos)
@@ -31,6 +22,11 @@ function generateCacheKey(url: string, params?: any): string {
 export async function getCache<T>(key: string, ttl: number = DEFAULT_TTL): Promise<T | null> {
   try {
     const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      // Em modo mock ou quando Prisma não está disponível, retornar null silenciosamente
+      return null;
+    }
+    
     const cached = await prismaClient.httpCache.findUnique({
       where: { key },
     });
@@ -42,16 +38,21 @@ export async function getCache<T>(key: string, ttl: number = DEFAULT_TTL): Promi
     // Verificar se o cache ainda é válido
     const age = Date.now() - cached.createdAt.getTime();
     if (age > ttl) {
-      // Cache expirado, remover
-      await prismaClient.httpCache.delete({ where: { key } });
+      // Cache expirado, remover (não aguardar erro se falhar)
+      prismaClient.httpCache.delete({ where: { key } }).catch(() => {
+        // Ignorar erros ao deletar cache expirado
+      });
       return null;
     }
 
     // Deserializar o payload
     const payload = JSON.parse(cached.payload.toString('utf-8'));
     return payload as T;
-  } catch (error) {
-    console.error('[cacheService] Erro ao buscar cache:', error);
+  } catch (error: any) {
+    // Log apenas em desenvolvimento, não quebrar o fluxo
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[cacheService] Erro ao buscar cache (continuando sem cache):', error?.message);
+    }
     return null;
   }
 }
@@ -62,6 +63,11 @@ export async function getCache<T>(key: string, ttl: number = DEFAULT_TTL): Promi
 export async function setCache<T>(key: string, data: T): Promise<void> {
   try {
     const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      // Em modo mock ou quando Prisma não está disponível, retornar silenciosamente
+      return;
+    }
+    
     const payload = Buffer.from(JSON.stringify(data), 'utf-8');
 
     await prismaClient.httpCache.upsert({
@@ -75,8 +81,12 @@ export async function setCache<T>(key: string, data: T): Promise<void> {
         createdAt: new Date(),
       },
     });
-  } catch (error) {
-    console.error('[cacheService] Erro ao salvar cache:', error);
+  } catch (error: any) {
+    // Log apenas em desenvolvimento, não quebrar o fluxo
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[cacheService] Erro ao salvar cache (continuando sem cache):', error?.message);
+    }
+    // Não fazer throw - cache é opcional, não deve quebrar o fluxo principal
   }
 }
 
@@ -86,6 +96,9 @@ export async function setCache<T>(key: string, data: T): Promise<void> {
 export async function deleteCache(key: string): Promise<void> {
   try {
     const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return;
+    }
     await prismaClient.httpCache.delete({ where: { key } }).catch(() => {
       // Ignorar erro se não existir
     });
@@ -100,6 +113,9 @@ export async function deleteCache(key: string): Promise<void> {
 export async function clearCache(): Promise<void> {
   try {
     const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return;
+    }
     await prismaClient.httpCache.deleteMany();
   } catch (error) {
     console.error('[cacheService] Erro ao limpar cache:', error);
@@ -112,6 +128,9 @@ export async function clearCache(): Promise<void> {
 export async function cleanExpiredCache(ttl: number = DEFAULT_TTL): Promise<number> {
   try {
     const prismaClient = await getPrisma();
+    if (!prismaClient) {
+      return 0;
+    }
     const cutoff = new Date(Date.now() - ttl);
     const result = await prismaClient.httpCache.deleteMany({
       where: {

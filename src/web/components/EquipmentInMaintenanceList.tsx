@@ -19,9 +19,10 @@ interface EquipmentInMaintenance {
   nome: string;
   setor: string;
   setorId: number | null;
-  primeiraOS: OS;
-  totalOS: number;
-  todasOS: OS[];
+  os: OS & {
+    codigoSerial?: number;
+    ocorrencia?: string | null;
+  };
 }
 
 interface EquipmentInMaintenanceListProps {
@@ -81,7 +82,7 @@ export default function EquipmentInMaintenanceList({
           }}
         >
           <FiAlertTriangle size={24} color={theme.colors.warning} />
-          Equipamentos em Manutenção (Corretiva)
+          Ordens de Serviço em Aberto (Corretivas)
         </h3>
         <div style={{ textAlign: 'center', padding: theme.spacing.xl, color: theme.colors.gray[600] }}>
           Carregando...
@@ -112,10 +113,10 @@ export default function EquipmentInMaintenanceList({
           }}
         >
           <FiAlertTriangle size={24} color={theme.colors.warning} />
-          Equipamentos em Manutenção (Corretiva)
+          Ordens de Serviço em Aberto (Corretivas)
         </h3>
         <div style={{ textAlign: 'center', padding: theme.spacing.xl, color: theme.colors.gray[600] }}>
-          Nenhum equipamento em manutenção no momento.
+          Nenhuma ordem de serviço corretiva aberta no momento.
         </div>
       </div>
     );
@@ -150,7 +151,7 @@ export default function EquipmentInMaintenanceList({
           }}
         >
           <FiAlertTriangle size={24} color={theme.colors.warning} />
-          Equipamentos em Manutenção
+          Ordens de Serviço em Aberto
         </h3>
         {total !== undefined && (
           <span
@@ -162,25 +163,25 @@ export default function EquipmentInMaintenanceList({
               borderRadius: theme.borderRadius.sm,
             }}
           >
-            {total} equipamento{total !== 1 ? 's' : ''}
+            {total} OS
           </span>
         )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
-        {data.map((equipment) => {
-          const daysInMaintenance = getDaysInMaintenance(equipment.primeiraOS.abertura);
-          const priorityColor = getPriorityColor(equipment.primeiraOS.prioridade);
+        {data.map((equipment, index) => {
+          const daysInMaintenance = getDaysInMaintenance(equipment.os.abertura);
+          const priorityColor = getPriorityColor(equipment.os.prioridade);
 
           return (
             <div
-              key={equipment.id}
+              key={`${equipment.id}-${equipment.os.codigo}-${index}`}
               style={{
                 border: `1px solid ${theme.colors.gray[200]}`,
                 borderRadius: theme.borderRadius.md,
                 padding: theme.spacing.md,
                 transition: 'all 0.2s',
-                backgroundColor: equipment.totalOS > 1 ? `${theme.colors.warning}05` : 'transparent',
+                backgroundColor: 'transparent',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = theme.colors.warning;
@@ -218,20 +219,6 @@ export default function EquipmentInMaintenanceList({
                     >
                       {equipment.nome}
                     </h4>
-                    {equipment.totalOS > 1 && (
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          backgroundColor: theme.colors.warning,
-                          color: theme.colors.white,
-                          padding: `2px ${theme.spacing.xs}`,
-                          borderRadius: theme.borderRadius.sm,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {equipment.totalOS} OS
-                      </span>
-                    )}
                   </div>
                   <div
                     style={{
@@ -263,11 +250,11 @@ export default function EquipmentInMaintenanceList({
                     }}
                   >
                     <span>
-                      <strong>OS:</strong> {equipment.primeiraOS.codigo}
+                      <strong>OS:</strong> {equipment.os.codigo}
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs / 2 }}>
                       <FiClock size={14} />
-                      Aberta em {formatDate(equipment.primeiraOS.abertura)}
+                      Aberta em {formatDate(equipment.os.abertura)}
                       {daysInMaintenance > 0 && (
                         <span style={{ color: daysInMaintenance > 30 ? theme.colors.danger : theme.colors.gray[600] }}>
                           ({daysInMaintenance} dia{daysInMaintenance !== 1 ? 's' : ''})
@@ -275,18 +262,18 @@ export default function EquipmentInMaintenanceList({
                       )}
                     </span>
                     <span>
-                      <strong>Tipo:</strong> {equipment.primeiraOS.tipoManutencao}
+                      <strong>Tipo:</strong> {equipment.os.tipoManutencao}
                     </span>
                     <span style={{ color: priorityColor, fontWeight: 600 }}>
-                      <strong>Prioridade:</strong> {equipment.primeiraOS.prioridade}
+                      <strong>Prioridade:</strong> {equipment.os.prioridade}
                     </span>
                   </div>
                 </div>
                 <button
                   onClick={() => {
-                    const osData = equipment.primeiraOS.dadosCompletos || equipment.primeiraOS;
+                    const osData = equipment.os.dadosCompletos || equipment.os;
                     console.log('[EquipmentInMaintenanceList] Dados da OS:', osData);
-                    console.log('[EquipmentInMaintenanceList] Campo Ocorrencia:', osData.Ocorrencia || osData.Ocorrência || osData.Descricao || osData.Descrição || osData.Problema || osData.Relato || 'NÃO ENCONTRADO');
+                    console.log('[EquipmentInMaintenanceList] Campo Ocorrencia:', osData.Ocorrencia || osData.Ocorrência || osData.Descricao || osData.Descrição || osData.Problema || osData.Relato || equipment.os.ocorrencia || 'NÃO ENCONTRADO');
                     setSelectedOS(osData);
                   }}
                   style={{
@@ -333,7 +320,7 @@ export default function EquipmentInMaintenanceList({
               fontWeight: 500,
             }}
           >
-            Ver todos os {total} equipamentos em manutenção →
+            Ver todas as {total} OS em manutenção →
           </Link>
         </div>
       )}
