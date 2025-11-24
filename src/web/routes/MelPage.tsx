@@ -1762,63 +1762,136 @@ function EditRuleModal({
     queryFn: async () => {
       // Usar o endpoint do MEL que já busca equipamentos por setor corretamente
       const url = `/api/ecm/mel/sector/${editingRule.sectorId}/equipments`;
-      const response = await apiClient.get<any>(url);
+      console.log(`[EditRuleModal] Buscando equipamentos do setor ${editingRule.sectorId} usando URL: ${url}`);
       
-      console.log('[EditRuleModal] Resposta do endpoint MEL equipments:', {
-        success: response?.success,
-        hasGrupos: !!response?.grupos,
-        gruposLength: Array.isArray(response?.grupos) ? response.grupos.length : 0,
-        sectorId: response?.sectorId,
-        sectorName: response?.sectorName,
-      });
-      
-      // O endpoint retorna { success, sectorId, sectorName, grupos: [...] }
-      // Cada grupo tem: { equipmentGroupKey, equipmentGroupName, equipamentos: [...] }
-      if (response?.success && Array.isArray(response.grupos)) {
-        // Extrair TODOS os equipamentos de todos os grupos
-        const todosEquipamentos: any[] = [];
-        response.grupos.forEach((grupo: any) => {
-          if (Array.isArray(grupo.equipamentos)) {
-            grupo.equipamentos.forEach((eq: any) => {
-              // Normalizar para o formato esperado pelo modal
-              todosEquipamentos.push({
-                Id: eq.id,
-                Tag: eq.tag,
-                Equipamento: eq.equipamento,
-                Modelo: eq.modelo,
-                Fabricante: eq.fabricante,
-                Status: eq.status,
-                Situacao: eq.status,
-              });
-            });
-          }
+      try {
+        const response = await apiClient.get<any>(url);
+        
+        console.log('[EditRuleModal] Resposta completa do endpoint MEL equipments:', {
+          responseType: typeof response,
+          hasResponse: !!response,
+          keys: response ? Object.keys(response) : [],
+          success: response?.success,
+          hasGrupos: !!response?.grupos,
+          gruposLength: Array.isArray(response?.grupos) ? response.grupos.length : 0,
+          sectorId: response?.sectorId,
+          sectorName: response?.sectorName,
         });
         
-        console.log('[EditRuleModal] Total de equipamentos extraídos de todos os grupos:', todosEquipamentos.length);
+        // Log detalhado dos grupos
+        if (Array.isArray(response?.grupos)) {
+          console.log('[EditRuleModal] Detalhes dos grupos recebidos:');
+          response.grupos.forEach((grupo: any, index: number) => {
+            console.log(`[EditRuleModal] Grupo ${index + 1}:`, {
+              equipmentGroupKey: grupo.equipmentGroupKey,
+              equipmentGroupName: grupo.equipmentGroupName,
+              quantidadeEquipamentos: Array.isArray(grupo.equipamentos) ? grupo.equipamentos.length : 0,
+              equipamentosIsArray: Array.isArray(grupo.equipamentos),
+              primeiroEquipamento: Array.isArray(grupo.equipamentos) && grupo.equipamentos.length > 0 ? grupo.equipamentos[0] : null,
+            });
+          });
+        }
         
-        // Remover duplicatas por ID
-        const equipamentosUnicos = Array.from(
-          new Map(todosEquipamentos.map((eq) => [eq.Id, eq])).values()
-        );
+        // O endpoint retorna { success, sectorId, sectorName, grupos: [...] }
+        // Cada grupo tem: { equipmentGroupKey, equipmentGroupName, equipamentos: [...] }
+        if (response?.success && Array.isArray(response.grupos)) {
+          // Extrair TODOS os equipamentos de todos os grupos
+          const todosEquipamentos: any[] = [];
+          response.grupos.forEach((grupo: any, grupoIndex: number) => {
+            if (Array.isArray(grupo.equipamentos)) {
+              console.log(`[EditRuleModal] Processando grupo ${grupoIndex + 1} (${grupo.equipmentGroupName}): ${grupo.equipamentos.length} equipamentos`);
+              grupo.equipamentos.forEach((eq: any, eqIndex: number) => {
+                // Normalizar para o formato esperado pelo modal
+                const equipamentoNormalizado = {
+                  Id: eq.id || eq.Id,
+                  Tag: eq.tag || eq.Tag || '',
+                  Equipamento: eq.equipamento || eq.Equipamento || '',
+                  Modelo: eq.modelo || eq.Modelo || '',
+                  Fabricante: eq.fabricante || eq.Fabricante || '',
+                  Status: eq.status || eq.Status || '',
+                  Situacao: eq.status || eq.Status || eq.Situacao || '',
+                };
+                todosEquipamentos.push(equipamentoNormalizado);
+                
+                // Log dos primeiros 3 equipamentos de cada grupo
+                if (eqIndex < 3) {
+                  console.log(`[EditRuleModal] Equipamento ${eqIndex + 1} do grupo ${grupoIndex + 1}:`, {
+                    original: eq,
+                    normalizado: equipamentoNormalizado,
+                  });
+                }
+              });
+            } else {
+              console.warn(`[EditRuleModal] Grupo ${grupoIndex + 1} não tem equipamentos como array:`, {
+                grupo,
+                tipo: typeof grupo.equipamentos,
+              });
+            }
+          });
+          
+          console.log('[EditRuleModal] Total de equipamentos extraídos de todos os grupos:', todosEquipamentos.length);
+          
+          // Remover duplicatas por ID
+          const equipamentosUnicos = Array.from(
+            new Map(todosEquipamentos.map((eq) => [eq.Id, eq])).values()
+          );
+          
+          console.log('[EditRuleModal] Equipamentos únicos após remover duplicatas:', equipamentosUnicos.length);
+          
+          return equipamentosUnicos; // Retornar diretamente o array, não dentro de um objeto
+        }
         
-        console.log('[EditRuleModal] Equipamentos únicos após remover duplicatas:', equipamentosUnicos.length);
-        
-        return { data: equipamentosUnicos, statistics: {}, pagination: {} };
+        console.warn('[EditRuleModal] Resposta do endpoint não contém grupos válidos:', {
+          success: response?.success,
+          grupos: response?.grupos,
+          responseCompleta: response,
+        });
+        return [];
+      } catch (error: any) {
+        console.error('[EditRuleModal] Erro ao buscar equipamentos:', error);
+        console.error('[EditRuleModal] Detalhes do erro:', {
+          message: error?.message,
+          response: error?.response?.data,
+          status: error?.response?.status,
+        });
+        throw error;
       }
-      
-      console.warn('[EditRuleModal] Nenhum equipamento encontrado na resposta do endpoint MEL');
-      return { data: [], statistics: {}, pagination: {} };
     },
     enabled: !!editingRule.sectorId,
   });
 
   // Extrair array de equipamentos da resposta
   const equipments = (() => {
-    if (!melEquipmentsResponse) return [];
-    if (Array.isArray(melEquipmentsResponse)) return melEquipmentsResponse;
-    if (melEquipmentsResponse.data && Array.isArray(melEquipmentsResponse.data)) return melEquipmentsResponse.data;
+    if (!melEquipmentsResponse) {
+      console.log('[EditRuleModal] melEquipmentsResponse é null/undefined');
+      return [];
+    }
+    
+    // Se a resposta já é um array, usar diretamente
+    if (Array.isArray(melEquipmentsResponse)) {
+      console.log(`[EditRuleModal] Equipamentos extraídos (array direto): ${melEquipmentsResponse.length}`);
+      return melEquipmentsResponse;
+    }
+    
+    // Se a resposta tem um campo 'data' que é array
+    if (melEquipmentsResponse.data && Array.isArray(melEquipmentsResponse.data)) {
+      console.log(`[EditRuleModal] Equipamentos extraídos (campo data): ${melEquipmentsResponse.data.length}`);
+      return melEquipmentsResponse.data;
+    }
+    
+    // Tentar encontrar qualquer campo que seja array
     const arrayField = Object.values(melEquipmentsResponse).find(val => Array.isArray(val));
-    return arrayField || [];
+    if (arrayField) {
+      console.log(`[EditRuleModal] Equipamentos extraídos (campo array encontrado): ${arrayField.length}`);
+      return arrayField as any[];
+    }
+    
+    console.warn('[EditRuleModal] Não foi possível extrair array de equipamentos da resposta:', {
+      tipo: typeof melEquipmentsResponse,
+      keys: Object.keys(melEquipmentsResponse),
+      resposta: melEquipmentsResponse,
+    });
+    return [];
   })();
 
   // Calcular disponibilidade dos equipamentos selecionados (DEPOIS de equipments ser definido)

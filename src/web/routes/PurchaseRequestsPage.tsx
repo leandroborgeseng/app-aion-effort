@@ -104,9 +104,9 @@ export default function PurchaseRequestsPage() {
     },
   });
 
-  // Buscar OS abertas
+  // Buscar TODAS as OS (abertas e fechadas) para poder filtrar no modal
   const { data: osList } = useQuery({
-    queryKey: ['os-list-open'],
+    queryKey: ['os-list-all'],
     queryFn: async () => {
       const response = await apiClient.get('/api/ecm/os?page=1&pageSize=50000');
       // O endpoint retorna { items, page, pageSize, totalItems, ... }
@@ -117,14 +117,14 @@ export default function PurchaseRequestsPage() {
         osArray = response.items;
       }
       
-      // Filtrar apenas OS abertas (não canceladas)
-      const osAbertas = osArray.filter((os: any) => {
+      // Retornar TODAS as OS (não filtrar - o filtro será feito no modal)
+      // Apenas excluir OS canceladas
+      const osFiltradas = osArray.filter((os: any) => {
         const status = (os.SituacaoDaOS || os.Status || '').toLowerCase();
-        return !status.includes('cancelada') && !status.includes('cancelado') && 
-               !status.includes('fechada') && !status.includes('fechado');
+        return !status.includes('cancelada') && !status.includes('cancelado');
       });
       
-      return osAbertas;
+      return osFiltradas;
     },
   });
 
@@ -607,6 +607,9 @@ function PurchaseRequestForm({
   onCancel: () => void;
   isLoading: boolean;
 }) {
+  // Estado para filtrar OS por status (Abertas/Fechadas/Todas)
+  const [osStatusFilter, setOsStatusFilter] = useState<'Abertas' | 'Fechadas' | 'Todas'>('Todas');
+  
   const [formData, setFormData] = useState({
     numeroSolicitacao: purchaseRequest?.numeroSolicitacao || '',
     sectorId: purchaseRequest?.sectorId || (sectors[0]?.id || ''),
@@ -623,6 +626,36 @@ function PurchaseRequestForm({
     serviceOrderIds: purchaseRequest?.serviceOrders?.map(os => os.codigoSerialOS) || [],
     investmentIds: purchaseRequest?.investments?.map(inv => inv.id) || [],
   });
+  
+  // Filtrar OS baseado no status selecionado, mas SEMPRE incluir OS já vinculadas
+  const filteredOsList = useMemo(() => {
+    if (!osList || osList.length === 0) return [];
+    
+    // IDs das OS já vinculadas (sempre mostrar)
+    const vinculadasIds = new Set(formData.serviceOrderIds.map(id => Number(id)));
+    
+    return osList.filter((os: any) => {
+      const osId = os.CodigoSerialOS;
+      const status = (os.SituacaoDaOS || os.Status || '').toLowerCase();
+      const isAberta = !status.includes('fechada') && !status.includes('fechado');
+      const isFechada = status.includes('fechada') || status.includes('fechado');
+      
+      // Se já está vinculada, sempre mostrar
+      if (vinculadasIds.has(osId)) {
+        return true;
+      }
+      
+      // Caso contrário, aplicar o filtro
+      if (osStatusFilter === 'Abertas') {
+        return isAberta;
+      } else if (osStatusFilter === 'Fechadas') {
+        return isFechada;
+      } else {
+        // Todas
+        return true;
+      }
+    });
+  }, [osList, osStatusFilter, formData.serviceOrderIds]);
 
   // Resetar formulário quando purchaseRequest mudar (ou quando for undefined para nova solicitação)
   useEffect(() => {
@@ -664,6 +697,16 @@ function PurchaseRequestForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevenir propagação do evento
+
+    console.log('[PurchaseRequestForm] handleSubmit chamado', { formData });
+
+    // Validar campos obrigatórios
+    if (!formData.sectorId || !formData.description || !formData.dataSolicitacao) {
+      console.error('[PurchaseRequestForm] Campos obrigatórios não preenchidos');
+      toast.error('Preencha todos os campos obrigatórios');
+      return;
+    }
 
     // Preparar serviceOrderIds - usar CodigoSerialOS (número) ou id (string) conforme disponível
     const serviceOrderIds = (formData.serviceOrderIds || []).map(id => {
@@ -910,10 +953,30 @@ function PurchaseRequestForm({
         </div>
 
         <div style={{ gridColumn: '1 / -1' }}>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: theme.colors.dark, marginBottom: theme.spacing.xs }}>
-            <FiClipboard size={16} style={{ display: 'inline', marginRight: theme.spacing.xs }} />
-            Ordens de Serviço Vinculadas ({formData.serviceOrderIds.length} selecionada{formData.serviceOrderIds.length !== 1 ? 's' : ''})
-          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xs }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: theme.colors.dark, margin: 0 }}>
+              <FiClipboard size={16} style={{ display: 'inline', marginRight: theme.spacing.xs }} />
+              Ordens de Serviço Vinculadas ({formData.serviceOrderIds.length} selecionada{formData.serviceOrderIds.length !== 1 ? 's' : ''})
+            </label>
+            <select
+              value={osStatusFilter}
+              onChange={(e) => setOsStatusFilter(e.target.value as 'Abertas' | 'Fechadas' | 'Todas')}
+              style={{
+                padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                border: `1px solid ${theme.colors.gray[300]}`,
+                borderRadius: theme.borderRadius.sm,
+                fontSize: '13px',
+                backgroundColor: theme.colors.white,
+                color: theme.colors.dark,
+                cursor: 'pointer',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <option value="Todas">Todas</option>
+              <option value="Abertas">Abertas</option>
+              <option value="Fechadas">Fechadas</option>
+            </select>
+          </div>
           <div style={{ 
             maxHeight: '200px', 
             overflowY: 'auto', 
@@ -922,10 +985,17 @@ function PurchaseRequestForm({
             padding: theme.spacing.sm,
             backgroundColor: theme.colors.white,
           }}>
-            {osList.length === 0 ? (
-              <p style={{ color: theme.colors.gray[600], fontSize: '14px', margin: 0 }}>Carregando OS...</p>
+            {filteredOsList.length === 0 ? (
+              <p style={{ color: theme.colors.gray[600], fontSize: '14px', margin: 0 }}>
+                {osList.length === 0 ? 'Carregando OS...' : 'Nenhuma OS encontrada com o filtro selecionado.'}
+              </p>
             ) : (
-              osList.slice(0, 100).map((os: any) => (
+              filteredOsList.slice(0, 100).map((os: any) => {
+                const status = (os.SituacaoDaOS || os.Status || '').toLowerCase();
+                const isFechada = status.includes('fechada') || status.includes('fechado');
+                const isVinculada = formData.serviceOrderIds.includes(os.CodigoSerialOS);
+                
+                return (
                 <label
                   key={os.id || os.CodigoSerialOS}
                   style={{
@@ -961,11 +1031,42 @@ function PurchaseRequestForm({
                       color: theme.colors.dark,
                     }}
                   />
-                  <span style={{ fontSize: '13px', color: theme.colors.dark }}>
+                  <span style={{ 
+                    fontSize: '13px', 
+                    color: theme.colors.dark,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: theme.spacing.xs,
+                  }}>
                     {os.OS || os.osCodigo || os.CodigoSerialOS} - {os.Equipamento || 'Sem equipamento'}
+                    {isFechada && (
+                      <span style={{
+                        fontSize: '11px',
+                        padding: '2px 6px',
+                        backgroundColor: `${theme.colors.success}20`,
+                        color: theme.colors.success,
+                        borderRadius: theme.borderRadius.sm,
+                        fontWeight: 600,
+                      }}>
+                        Fechada
+                      </span>
+                    )}
+                    {isVinculada && (
+                      <span style={{
+                        fontSize: '11px',
+                        padding: '2px 6px',
+                        backgroundColor: `${theme.colors.primary}20`,
+                        color: theme.colors.primary,
+                        borderRadius: theme.borderRadius.sm,
+                        fontWeight: 600,
+                      }}>
+                        Vinculada
+                      </span>
+                    )}
                   </span>
                 </label>
-              ))
+              );
+              })
             )}
           </div>
         </div>
