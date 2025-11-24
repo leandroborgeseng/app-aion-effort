@@ -6,8 +6,9 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     container_name: aion-effort-backend
-    ports:
-      - "4000:4000"
+    # Removendo exposição de porta - Caddy vai fazer proxy
+    expose:
+      - "4000"
     env_file:
       - .env
     environment:
