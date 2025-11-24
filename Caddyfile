@@ -66,3 +66,39 @@ av.aion.eng.br {
     encode gzip zstd
 }
 
+# HTTPS - Proxy reverso para aplicação PM (porta 8080)
+pm.aion.eng.br {
+    # Proxy reverso para aplicação rodando no host na porta 8080
+    reverse_proxy host.docker.internal:8080 {
+        # Headers importantes
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        
+        # Timeouts
+        transport http {
+            dial_timeout 30s
+            response_header_timeout 120s
+        }
+    }
+
+    # Headers de segurança
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Logs
+    log {
+        output file /var/log/caddy/pm-access.log
+        format json
+    }
+
+    # Compressão
+    encode gzip zstd
+}
+

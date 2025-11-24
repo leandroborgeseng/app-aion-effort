@@ -86,6 +86,9 @@ services:
       - ./logs/caddy:/var/log/caddy
     environment:
       - CADDY_ADMIN=0.0.0.0:2019  # Admin API (opcional, pode remover em produção)
+    # Adicionar host.docker.internal para acessar serviços no host (Linux)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - frontend
       - backend
