@@ -1,192 +1,145 @@
-# 🚀 Guia de Deploy em Produção
+# 🚀 Guia de Deploy para Produção
 
-## ✅ Status Atual
+## Deploy Rápido (Recomendado)
 
-**Último commit enviado para o GitHub:**
-```
-feat: implementar filtros de personificação e melhorias no sistema
-```
-
-**Mudanças principais:**
-- Filtro de personificação funcionando no Dashboard e página OS
-- Correção de nomes de setores na personificação
-- Menu lateral responsivo para desktop e mobile
-- Melhorias de contraste em inputs e labels
-- Sistema de ajuda integrado (HelpModal)
-- Filtros de investimentos corrigidos
-
-## 📋 Pré-requisitos para Deploy
-
-1. **Acesso SSH ao servidor de produção**
-2. **Docker e Docker Compose instalados**
-3. **Repositório Git clonado no servidor**
-4. **Variáveis de ambiente configuradas (.env)**
-
-## 🔧 Passo a Passo para Deploy
-
-### Opção 1: Deploy Automático (Recomendado)
-
-No servidor de produção, execute:
+Execute o script automatizado:
 
 ```bash
-# 1. Conectar no servidor
-ssh usuario@seu-servidor
-
-# 2. Ir para o diretório do projeto
-cd /opt/apps/app-aion-effort  # ou o caminho onde está o projeto
-
-# 3. Fazer pull das mudanças
-git pull origin main
-
-# 4. Executar script de deploy
-chmod +x deploy-producao-completo.sh
-./deploy-producao-completo.sh
-```
-
-### Opção 2: Deploy Manual
-
-Se o script automático não funcionar, execute manualmente:
-
-```bash
-# 1. Fazer pull
 cd /opt/apps/app-aion-effort
+chmod +x deploy-producao.sh
+./deploy-producao.sh
+```
+
+## Deploy Manual (Passo a Passo)
+
+Se preferir fazer manualmente ou se o script falhar:
+
+### 1. Conectar ao servidor
+
+```bash
+ssh seu-usuario@seu-servidor
+cd /opt/apps/app-aion-effort
+```
+
+### 2. Fazer backup do banco de dados
+
+```bash
+# Backup do banco
+cp prisma/dev.db "prisma/dev.db.backup.$(date +%Y%m%d_%H%M%S)"
+```
+
+### 3. Atualizar código do GitHub
+
+```bash
+git fetch origin
 git pull origin main
+```
 
-# 2. Verificar último commit
-git log --oneline -1
+### 4. Sincronizar schema do banco (se necessário)
 
-# 3. Parar containers
-docker-compose down
+Se houver mudanças no `prisma/schema.prisma`:
 
-# 4. Rebuild backend (sem cache para garantir atualização)
-docker-compose build --no-cache backend
+```bash
+docker-compose run --rm backend pnpm prisma:db:push
+```
 
-# 5. Rebuild frontend (sem cache)
-docker-compose build --no-cache frontend
+### 5. Rebuildar containers (se necessário)
 
-# 6. Subir containers
-docker-compose up -d
+Se houver mudanças em `Dockerfile`, `package.json` ou `pnpm-lock.yaml`:
 
-# 7. Aguardar inicialização
-sleep 30
+```bash
+# Rebuild backend
+docker-compose build backend
 
-# 8. Verificar status
+# Rebuild frontend (se necessário)
+docker-compose build frontend
+```
+
+### 6. Reiniciar serviços
+
+```bash
+docker-compose restart backend frontend
+```
+
+### 7. Verificar saúde dos serviços
+
+```bash
+# Ver status
 docker-compose ps
 
-# 9. Ver logs
-docker-compose logs -f backend
+# Ver logs
+docker-compose logs --tail=50 backend
+docker-compose logs --tail=50 frontend
 ```
 
-## ✅ Verificações Pós-Deploy
+### 8. Testar aplicação
 
-Após o deploy, verifique:
+Acesse: `https://av.aion.eng.br`
 
-### 1. Status dos Containers
+## Troubleshooting
+
+### Problema: Erro ao fazer git pull
+
 ```bash
-docker-compose ps
+# Se houver conflitos locais
+git stash
+git pull origin main
+git stash pop
 ```
 
-Ambos os containers devem estar com status `healthy` ou `Up`.
-
-### 2. Testar API Backend
-```bash
-curl http://localhost:4000/health
-```
-
-Deve retornar: `{"ok":true,"mock":false}`
-
-### 3. Testar API de Setores
-```bash
-curl http://localhost:4000/api/ecm/investments/sectors/list
-```
-
-### 4. Testar Frontend
-Acesse no navegador: `http://seu-servidor:3000`
-
-### 5. Testar Filtros de Personificação
-1. Faça login como admin
-2. Personifique um usuário com setores específicos
-3. Verifique se o Dashboard mostra apenas equipamentos dos setores do usuário
-4. Verifique se a página OS mostra apenas OS dos setores do usuário
-
-## 🔍 Troubleshooting
-
-### Container não inicia
+### Problema: Serviços não iniciam
 
 ```bash
 # Ver logs detalhados
 docker-compose logs backend
 docker-compose logs frontend
 
-# Verificar se porta está em uso
-netstat -tulpn | grep 4000
-netstat -tulpn | grep 3000
+# Verificar se há erros no banco
+docker-compose exec backend pnpm prisma db push --skip-generate
 ```
 
-### Erro de permissões no banco
+### Problema: Banco de dados read-only
 
 ```bash
-# Ajustar permissões
-chmod 664 prisma/dev.db
-chown $USER:$USER prisma/dev.db
+# Corrigir permissões
+sudo chown -R 1001:1001 prisma/
+sudo chmod 666 prisma/dev.db
+sudo chmod 755 prisma/
+
+# Remover arquivos auxiliares do SQLite
+rm -f prisma/dev.db-journal prisma/dev.db-wal prisma/dev.db-shm
+
+# Reiniciar backend
+docker-compose restart backend
 ```
 
-### Rebuild completo
+### Problema: Rollback
+
+Se precisar reverter as mudanças:
 
 ```bash
-# Parar tudo
-docker-compose down -v
+# Restaurar código
+git reset --hard HEAD@{1}
 
-# Remover imagens antigas
-docker rmi aion-effort-backend aion-effort-frontend 2>/dev/null || true
+# Restaurar banco (se necessário)
+cp prisma/dev.db.backup.* prisma/dev.db
 
-# Rebuild do zero
-docker-compose build --no-cache
-docker-compose up -d
+# Reiniciar serviços
+docker-compose restart backend frontend
 ```
 
-## 📝 Checklist de Deploy
+## Checklist Pós-Deploy
 
-- [ ] Código commitado e enviado para GitHub
-- [ ] Pull feito no servidor de produção
-- [ ] Containers parados (`docker-compose down`)
-- [ ] Rebuild feito (`docker-compose build --no-cache`)
-- [ ] Containers iniciados (`docker-compose up -d`)
-- [ ] Status dos containers verificado
-- [ ] Health check passou
-- [ ] Testado login e personificação
-- [ ] Testado filtros no Dashboard
-- [ ] Testado filtros na página OS
-- [ ] Logs verificados (sem erros críticos)
+- [ ] Aplicação acessível via HTTPS
+- [ ] Login funcionando
+- [ ] Criar novo usuário funcionando
+- [ ] Setores mostrando nomes corretos
+- [ ] Nenhum erro no console do navegador
+- [ ] Nenhum erro nos logs do backend
 
-## 🎯 URLs de Produção
+## Contato
 
-Baseado no script de deploy, as URLs prováveis são:
-- **Frontend**: `http://189.90.139.222:3000`
-- **Backend API**: `http://189.90.139.222:4000`
-
-## ⚠️ Importante
-
-1. **Sempre fazer backup** antes de deploy:
-   ```bash
-   cp prisma/dev.db prisma/dev.db.backup-$(date +%Y%m%d-%H%M%S)
-   ```
-
-2. **Verificar variáveis de ambiente** no servidor:
-   ```bash
-   docker-compose exec backend env | grep -E 'DATABASE_URL|JWT_SECRET|USE_MOCK'
-   ```
-
-3. **Executar migrações** se houver mudanças no schema:
-   ```bash
-   docker-compose exec backend pnpm prisma:db:push
-   ```
-
-## 📞 Suporte
-
-Se encontrar problemas:
-1. Verifique os logs: `docker-compose logs -f`
-2. Verifique o último commit: `git log --oneline -1`
-3. Verifique status: `docker-compose ps`
-4. Teste manualmente os endpoints da API
-
+Em caso de problemas, verifique:
+1. Logs dos containers: `docker-compose logs -f`
+2. Status dos containers: `docker-compose ps`
+3. Conectividade do banco: `docker-compose exec backend ls -la /app/prisma/`
