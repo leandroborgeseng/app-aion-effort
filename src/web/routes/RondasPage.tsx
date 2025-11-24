@@ -13,6 +13,7 @@ import {
   FiTrash2,
   FiFileText,
   FiShoppingCart,
+  FiSparkles,
 } from 'react-icons/fi';
 import { theme } from '../styles/theme';
 import { formatBrazilianDateLong } from '../utils/dateUtils';
@@ -22,6 +23,9 @@ export default function RondasPage() {
   const [showInvestmentForm, setShowInvestmentForm] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [summaryRoundId, setSummaryRoundId] = useState<string | null>(null);
+  const [summaryData, setSummaryData] = useState<any | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -411,6 +415,40 @@ export default function RondasPage() {
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: theme.spacing.xs }}>
+                    <button
+                      onClick={async () => {
+                        const roundId = round.id || `round-${idx}`;
+                        setIsGeneratingSummary(true);
+                        setSummaryRoundId(roundId);
+                        try {
+                          const res = await fetch(`/api/ecm/rounds/${roundId}/summary`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                          });
+                          if (!res.ok) throw new Error('Erro ao gerar resumo');
+                          const summary = await res.json();
+                          setSummaryData(summary);
+                        } catch (error: any) {
+                          alert('Erro ao gerar resumo: ' + (error?.message || 'Erro desconhecido'));
+                          setSummaryRoundId(null);
+                        } finally {
+                          setIsGeneratingSummary(false);
+                        }
+                      }}
+                      disabled={isGeneratingSummary}
+                      title="Gerar resumo inteligente com IA"
+                      style={{
+                        padding: theme.spacing.xs,
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${theme.colors.info}`,
+                        borderRadius: theme.borderRadius.sm,
+                        cursor: isGeneratingSummary ? 'not-allowed' : 'pointer',
+                        color: theme.colors.info,
+                        opacity: isGeneratingSummary ? 0.6 : 1,
+                      }}
+                    >
+                      <FiSparkles size={16} />
+                    </button>
                     <button
                       onClick={() => {
                         console.log('[RondasPage] Botão editar clicado, round:', round);
