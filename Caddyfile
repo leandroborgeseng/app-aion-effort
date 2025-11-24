@@ -3,7 +3,7 @@
 
 {
     # Configuração global do Caddy
-    email seu-email@exemplo.com  # Email para certificados SSL (Let's Encrypt)
+    email admin@aion.eng.br  # Email para certificados SSL (Let's Encrypt)
     # Ou use staging para testes sem limite de rate:
     # ca https://acme-staging-v02.api.letsencrypt.org/directory
 }
