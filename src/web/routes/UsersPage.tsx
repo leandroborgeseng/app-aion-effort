@@ -64,19 +64,26 @@ export default function UsersPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: Partial<User>) => {
+    mutationFn: async (data: Partial<User & { password?: string }>) => {
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Erro ao criar usuário');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Erro ao criar usuário');
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setShowForm(false);
       setFormData({});
+      alert('Usuário criado com sucesso! Senha padrão: senha123');
+    },
+    onError: (error: any) => {
+      alert('Erro ao criar usuário: ' + (error?.message || 'Erro desconhecido'));
     },
   });
 
@@ -133,10 +140,20 @@ export default function UsersPage() {
   };
 
   const handleSave = () => {
+    // Validações
+    if (!formData.name || !formData.email) {
+      alert('Nome e email são obrigatórios');
+      return;
+    }
+
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: formData });
     } else {
-      createMutation.mutate(formData);
+      // Garantir que senha está incluída (mesmo que vazia)
+      createMutation.mutate({
+        ...formData,
+        password: (formData as any).password || undefined, // Se vazio, será senha padrão no backend
+      } as any);
     }
   };
 
@@ -336,6 +353,30 @@ export default function UsersPage() {
                 placeholder="email@exemplo.com"
               />
             </div>
+            {!editingId && (
+              <div>
+                <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
+                  Senha {!editingId && <span style={{ color: theme.colors.gray[500], fontSize: '12px', fontWeight: 'normal' }}>(padrão: senha123)</span>}
+                </label>
+                <input
+                  type="password"
+                  value={(formData as any).password || ''}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value } as any)}
+                  style={{
+                    width: '100%',
+                    padding: theme.spacing.sm,
+                    border: `1px solid ${theme.colors.gray[300]}`,
+                    fontSize: '14px',
+                    backgroundColor: theme.colors.white,
+                    color: theme.colors.dark,
+                  }}
+                  placeholder="Deixe em branco para usar senha padrão"
+                />
+                <p style={{ marginTop: theme.spacing.xs / 2, fontSize: '12px', color: theme.colors.gray[500] }}>
+                  Se não informada, será usada a senha padrão "senha123"
+                </p>
+              </div>
+            )}
             <div>
               <label style={{ display: 'block', marginBottom: theme.spacing.xs, fontSize: '14px', fontWeight: 500, color: theme.colors.dark }}>
                 Função
