@@ -18,11 +18,33 @@ echo ""
 
 echo "2. Atualizando código do GitHub..."
 git fetch origin
+
+# Verificar se há mudanças locais no banco que podem causar conflito
+if git diff --quiet prisma/dev.db 2>/dev/null; then
+    echo "   ✅ Nenhuma mudança local no banco"
+else
+    echo "   ⚠️  Mudanças locais detectadas no banco de dados"
+    echo "   Descartando mudanças locais (backup já foi feito no passo 1)..."
+    git checkout -- prisma/dev.db 2>/dev/null || true
+    rm -f prisma/dev.db-journal prisma/dev.db-wal prisma/dev.db-shm
+    echo "   ✅ Mudanças locais descartadas"
+fi
+
 git pull origin main
 
 if [ $? -ne 0 ]; then
     echo "   ❌ Erro ao atualizar código"
-    exit 1
+    echo "   Tentando resolver conflitos..."
+    git checkout -- prisma/dev.db 2>/dev/null || true
+    rm -f prisma/dev.db-journal prisma/dev.db-wal prisma/dev.db-shm
+    git pull origin main
+    
+    if [ $? -ne 0 ]; then
+        echo "   ❌ Ainda há erros. Execute manualmente:"
+        echo "   git status"
+        echo "   ./resolver-conflicto-banco.sh"
+        exit 1
+    fi
 fi
 
 echo "   ✅ Código atualizado"
