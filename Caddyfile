@@ -15,30 +15,20 @@ http:// {
 
 # HTTPS - Proxy reverso principal
 av.aion.eng.br {
-    # Proxy reverso para o frontend (aplicação React)
-    handle / {
-        reverse_proxy frontend:80 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-
-    # Proxy reverso para API backend
+    # Proxy reverso para API backend (deve vir ANTES do handle /)
     handle /api/* {
         reverse_proxy backend:4000 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-            
             # Timeouts aumentados para requisições longas
             transport http {
                 dial_timeout 30s
                 response_header_timeout 120s
             }
         }
+    }
+
+    # Proxy reverso para o frontend (aplicação React)
+    handle / {
+        reverse_proxy frontend:80
     }
 
     # Headers de segurança
