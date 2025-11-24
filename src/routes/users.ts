@@ -73,33 +73,67 @@ users.get('/', async (req, res) => {
       });
 
       // Buscar nomes reais dos setores usando mapeamento do sistema
-      const { getSectorNamesFromUserSector } = await import('../utils/sectorMapping');
-      const { dataSource } = await import('../adapters/dataSource');
-      const equipamentos = await dataSource.equipamentos({
-        apenasAtivos: true,
-        incluirComponentes: false,
-        incluirCustoSubstituicao: false,
-      });
+      // Se houver erro no mapeamento, retornar usuários com nomes originais
+      let usersWithMappedSectors = users;
+      
+      try {
+        const { getSectorNamesFromUserSector } = await import('../utils/sectorMapping');
+        const { dataSource } = await import('../adapters/dataSource');
+        
+        let equipamentos: any[] = [];
+        try {
+          equipamentos = await dataSource.equipamentos({
+            apenasAtivos: true,
+            incluirComponentes: false,
+            incluirCustoSubstituicao: false,
+          });
+        } catch (equipError) {
+          console.warn('[users:GET] Erro ao buscar equipamentos para mapeamento:', equipError);
+          // Continuar sem equipamentos
+        }
 
-      // Atualizar nomes dos setores para cada usuário
-      const usersWithMappedSectors = await Promise.all(
-        users.map(async (user) => {
-          if (user.sectors.length === 0) {
-            return user;
-          }
+        // Atualizar nomes dos setores para cada usuário
+        usersWithMappedSectors = await Promise.all(
+          users.map(async (user) => {
+            if (user.sectors.length === 0) {
+              return user;
+            }
 
-          const sectorIds = user.sectors.map((s) => s.sectorId);
-          const sectorNames = await getSectorNamesFromUserSector(sectorIds, equipamentos, user.id, req);
+            try {
+              const sectorIds = user.sectors.map((s) => s.sectorId);
+              const sectorNames = await getSectorNamesFromUserSector(sectorIds, equipamentos, user.id, req);
 
-          return {
-            ...user,
-            sectors: user.sectors.map((sector, index) => ({
-              ...sector,
-              sectorName: sectorNames[index] || sector.sectorName || `Setor ${sector.sectorId}`,
-            })),
-          };
-        })
-      );
+              return {
+                ...user,
+                sectors: user.sectors.map((sector, index) => ({
+                  ...sector,
+                  sectorName: sectorNames[index] || sector.sectorName || `Setor ${sector.sectorId}`,
+                })),
+              };
+            } catch (sectorError) {
+              console.warn(`[users:GET] Erro ao mapear setores do usuário ${user.id}:`, sectorError);
+              // Retornar usuário com setores originais se houver erro
+              return {
+                ...user,
+                sectors: user.sectors.map((sector) => ({
+                  ...sector,
+                  sectorName: sector.sectorName || `Setor ${sector.sectorId}`,
+                })),
+              };
+            }
+          })
+        );
+      } catch (mappingError) {
+        console.error('[users:GET] Erro no mapeamento de setores, retornando usuários sem mapeamento:', mappingError);
+        // Em caso de erro, retornar usuários com nomes originais dos setores
+        usersWithMappedSectors = users.map((user) => ({
+          ...user,
+          sectors: user.sectors.map((sector) => ({
+            ...sector,
+            sectorName: sector.sectorName || `Setor ${sector.sectorId}`,
+          })),
+        }));
+      }
 
       res.json(usersWithMappedSectors);
     }
@@ -344,27 +378,46 @@ users.patch('/:id', async (req, res) => {
       });
 
       // Atualizar nomes dos setores usando mapeamento do sistema
+      // Se houver erro, retornar usuário com nomes originais
       if (user.sectors.length > 0) {
-        const { getSectorNamesFromUserSector } = await import('../utils/sectorMapping');
-        const { dataSource } = await import('../adapters/dataSource');
-        const equipamentos = await dataSource.equipamentos({
-          apenasAtivos: true,
-          incluirComponentes: false,
-          incluirCustoSubstituicao: false,
-        });
+        try {
+          const { getSectorNamesFromUserSector } = await import('../utils/sectorMapping');
+          const { dataSource } = await import('../adapters/dataSource');
+          
+          let equipamentos: any[] = [];
+          try {
+            equipamentos = await dataSource.equipamentos({
+              apenasAtivos: true,
+              incluirComponentes: false,
+              incluirCustoSubstituicao: false,
+            });
+          } catch (equipError) {
+            console.warn('[users:PATCH] Erro ao buscar equipamentos:', equipError);
+          }
 
-        const sectorIds = user.sectors.map((s) => s.sectorId);
-        const sectorNames = await getSectorNamesFromUserSector(sectorIds, equipamentos, user.id, req);
+          const sectorIds = user.sectors.map((s) => s.sectorId);
+          const sectorNames = await getSectorNamesFromUserSector(sectorIds, equipamentos, user.id, req);
 
-        const userWithMappedSectors = {
-          ...user,
-          sectors: user.sectors.map((sector, index) => ({
-            ...sector,
-            sectorName: sectorNames[index] || sector.sectorName || `Setor ${sector.sectorId}`,
-          })),
-        };
+          const userWithMappedSectors = {
+            ...user,
+            sectors: user.sectors.map((sector, index) => ({
+              ...sector,
+              sectorName: sectorNames[index] || sector.sectorName || `Setor ${sector.sectorId}`,
+            })),
+          };
 
-        res.json(userWithMappedSectors);
+          res.json(userWithMappedSectors);
+        } catch (mappingError) {
+          console.error('[users:PATCH] Erro no mapeamento de setores:', mappingError);
+          // Em caso de erro, retornar usuário com nomes originais
+          res.json({
+            ...user,
+            sectors: user.sectors.map((sector) => ({
+              ...sector,
+              sectorName: sector.sectorName || `Setor ${sector.sectorId}`,
+            })),
+          });
+        }
       } else {
         res.json(user);
       }
