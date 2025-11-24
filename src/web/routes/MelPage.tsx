@@ -1756,40 +1756,57 @@ function EditRuleModal({
     }
   }, [selectedEquipmentIds.size]); // Buscar quando o número de equipamentos selecionados mudar
 
-  // Buscar equipamentos do setor
-  const { data: inventoryResponse, isLoading: inventoryLoading, error: inventoryError } = useQuery({
-    queryKey: ['inventory', editingRule.sectorId],
+  // Buscar equipamentos do setor usando o endpoint do MEL
+  const { data: melEquipmentsResponse, isLoading: inventoryLoading, error: inventoryError } = useQuery({
+    queryKey: ['mel-equipments', editingRule.sectorId],
     queryFn: async () => {
-      // Buscar TODOS os equipamentos do setor (sem paginação limitante)
-      const url = `/api/ecm/lifecycle/inventario?page=1&pageSize=50000&setores=${editingRule.sectorId}`;
+      // Usar o endpoint do MEL que já busca equipamentos por setor corretamente
+      const url = `/api/ecm/mel/sector/${editingRule.sectorId}/equipments`;
       const response = await apiClient.get<any>(url);
       
-      console.log('[EditRuleModal] Resposta do inventário:', {
-        isArray: Array.isArray(response),
-        hasData: !!response?.data,
-        dataIsArray: Array.isArray(response?.data),
-        keys: response && typeof response === 'object' ? Object.keys(response) : 'N/A',
+      console.log('[EditRuleModal] Resposta do endpoint MEL equipments:', {
+        success: response?.success,
+        hasGrupos: !!response?.grupos,
+        gruposLength: Array.isArray(response?.grupos) ? response.grupos.length : 0,
+        sectorId: response?.sectorId,
+        sectorName: response?.sectorName,
       });
       
-      // O endpoint retorna { data: [...], pagination: {...}, statistics: {...} }
-      if (response && Array.isArray(response)) {
-        console.log('[EditRuleModal] Resposta é array direto:', response.length);
-        return { data: response, statistics: {}, pagination: {} };
-      }
-      if (response && response.data && Array.isArray(response.data)) {
-        console.log('[EditRuleModal] Equipamentos encontrados em response.data:', response.data.length);
-        return response;
-      }
-      if (response && typeof response === 'object' && !Array.isArray(response)) {
-        const arrayFields = Object.keys(response).filter(key => Array.isArray(response[key]));
-        if (arrayFields.length > 0) {
-          const firstArray = response[arrayFields[0]];
-          console.log('[EditRuleModal] Equipamentos encontrados em', arrayFields[0], ':', firstArray.length);
-          return { data: firstArray, statistics: response.statistics || {}, pagination: response.pagination || {} };
-        }
+      // O endpoint retorna { success, sectorId, sectorName, grupos: [...] }
+      // Cada grupo tem: { equipmentGroupKey, equipmentGroupName, equipamentos: [...] }
+      if (response?.success && Array.isArray(response.grupos)) {
+        // Extrair TODOS os equipamentos de todos os grupos
+        const todosEquipamentos: any[] = [];
+        response.grupos.forEach((grupo: any) => {
+          if (Array.isArray(grupo.equipamentos)) {
+            grupo.equipamentos.forEach((eq: any) => {
+              // Normalizar para o formato esperado pelo modal
+              todosEquipamentos.push({
+                Id: eq.id,
+                Tag: eq.tag,
+                Equipamento: eq.equipamento,
+                Modelo: eq.modelo,
+                Fabricante: eq.fabricante,
+                Status: eq.status,
+                Situacao: eq.status,
+              });
+            });
+          }
+        });
+        
+        console.log('[EditRuleModal] Total de equipamentos extraídos de todos os grupos:', todosEquipamentos.length);
+        
+        // Remover duplicatas por ID
+        const equipamentosUnicos = Array.from(
+          new Map(todosEquipamentos.map((eq) => [eq.Id, eq])).values()
+        );
+        
+        console.log('[EditRuleModal] Equipamentos únicos após remover duplicatas:', equipamentosUnicos.length);
+        
+        return { data: equipamentosUnicos, statistics: {}, pagination: {} };
       }
       
-      console.warn('[EditRuleModal] Nenhum equipamento encontrado na resposta');
+      console.warn('[EditRuleModal] Nenhum equipamento encontrado na resposta do endpoint MEL');
       return { data: [], statistics: {}, pagination: {} };
     },
     enabled: !!editingRule.sectorId,
@@ -1797,10 +1814,10 @@ function EditRuleModal({
 
   // Extrair array de equipamentos da resposta
   const equipments = (() => {
-    if (!inventoryResponse) return [];
-    if (Array.isArray(inventoryResponse)) return inventoryResponse;
-    if (inventoryResponse.data && Array.isArray(inventoryResponse.data)) return inventoryResponse.data;
-    const arrayField = Object.values(inventoryResponse).find(val => Array.isArray(val));
+    if (!melEquipmentsResponse) return [];
+    if (Array.isArray(melEquipmentsResponse)) return melEquipmentsResponse;
+    if (melEquipmentsResponse.data && Array.isArray(melEquipmentsResponse.data)) return melEquipmentsResponse.data;
+    const arrayField = Object.values(melEquipmentsResponse).find(val => Array.isArray(val));
     return arrayField || [];
   })();
 
