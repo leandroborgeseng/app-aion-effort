@@ -72,7 +72,36 @@ users.get('/', async (req, res) => {
         orderBy: { name: 'asc' },
       });
 
-      res.json(users);
+      // Buscar nomes reais dos setores usando mapeamento do sistema
+      const { getSectorNamesFromUserSector } = await import('../utils/sectorMapping');
+      const { dataSource } = await import('../adapters/dataSource');
+      const equipamentos = await dataSource.equipamentos({
+        apenasAtivos: true,
+        incluirComponentes: false,
+        incluirCustoSubstituicao: false,
+      });
+
+      // Atualizar nomes dos setores para cada usuário
+      const usersWithMappedSectors = await Promise.all(
+        users.map(async (user) => {
+          if (user.sectors.length === 0) {
+            return user;
+          }
+
+          const sectorIds = user.sectors.map((s) => s.sectorId);
+          const sectorNames = await getSectorNamesFromUserSector(sectorIds, equipamentos, user.id, req);
+
+          return {
+            ...user,
+            sectors: user.sectors.map((sector, index) => ({
+              ...sector,
+              sectorName: sectorNames[index] || sector.sectorName || `Setor ${sector.sectorId}`,
+            })),
+          };
+        })
+      );
+
+      res.json(usersWithMappedSectors);
     }
   } catch (e: any) {
     res.status(500).json({ error: true, message: e?.message });
@@ -135,7 +164,7 @@ users.get('/:id', async (req, res) => {
 // POST /api/users - Criar novo usuário
 users.post('/', async (req, res) => {
   try {
-    const { email, name, role, sectors, canImpersonate, managedUserIds } = req.body;
+    const { email, name, role, sectors, canImpersonate, managedUserIds, password } = req.body;
 
     if (USE_MOCK) {
       const newUser = {
@@ -154,37 +183,39 @@ users.post('/', async (req, res) => {
         return res.status(500).json({ error: true, message: 'Prisma não disponível' });
       }
 
+      // Verificar se email já existe
+      const existingUser = await prismaClient.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        return res.status(400).json({ error: true, message: 'Email já cadastrado' });
+      }
+
+      // Gerar hash da senha (senha padrão se não fornecida)
+      const bcrypt = await import('bcrypt');
+      const defaultPassword = password || 'senha123'; // Senha padrão temporária
+      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+      // Buscar nomes dos setores usando mapeamento do sistema
+      const { getSectorNamesFromUserSector } = await import('../utils/sectorMapping');
+      const sectorNames = sectors && sectors.length > 0 
+        ? await getSectorNamesFromUserSector(sectors, undefined, undefined, req)
+        : [];
+
       const user = await prismaClient.user.create({
         data: {
           email,
           name,
+          password: hashedPassword,
           role: role || 'comum',
+          active: true,
           canImpersonate: canImpersonate || false,
           sectors: {
-            create: await Promise.all(
-              (sectors || []).map(async (sectorId: number) => {
-                // Buscar nome do setor se disponível
-                let sectorName: string | null = null;
-                try {
-                  const { dataSource } = await import('../adapters/dataSource');
-                  const equipamentos = await dataSource.equipamentos({
-                    apenasAtivos: true,
-                    incluirComponentes: false,
-                    incluirCustoSubstituicao: false,
-                  });
-                  const equipamento = equipamentos.find((eq: any) => eq.SetorId === sectorId);
-                  if (equipamento?.Setor) {
-                    sectorName = equipamento.Setor;
-                  }
-                } catch (e) {
-                  // Ignorar erro ao buscar nome do setor
-                }
-                return {
-                  sectorId,
-                  sectorName,
-                };
-              })
-            ),
+            create: (sectors || []).map((sectorId: number, index: number) => ({
+              sectorId,
+              sectorName: sectorNames[index] || null,
+            })),
           },
           managedUsers: {
             create: managedUserIds?.map((userId: string) => ({
@@ -212,6 +243,7 @@ users.post('/', async (req, res) => {
       res.status(201).json(user);
     }
   } catch (e: any) {
+    console.error('[users:POST] Erro ao criar usuário:', e);
     res.status(500).json({ error: true, message: e?.message });
   }
 });
@@ -247,7 +279,8 @@ users.patch('/:id', async (req, res) => {
         });
 
         if (sectors.length > 0) {
-          // Buscar nomes dos setores para cache
+          // Buscar nomes dos setores usando mapeamento do sistema
+          const { getSectorNamesFromUserSector } = await import('../utils/sectorMapping');
           const { dataSource } = await import('../adapters/dataSource');
           const equipamentos = await dataSource.equipamentos({
             apenasAtivos: true,
@@ -255,18 +288,13 @@ users.patch('/:id', async (req, res) => {
             incluirCustoSubstituicao: false,
           });
           
-          const sectorMap = new Map<number, string>();
-          equipamentos.forEach((eq: any) => {
-            if (eq.SetorId && eq.Setor && !sectorMap.has(eq.SetorId)) {
-              sectorMap.set(eq.SetorId, eq.Setor);
-            }
-          });
+          const sectorNames = await getSectorNamesFromUserSector(sectors, equipamentos, id, req);
           
           await prismaClient.userSector.createMany({
-            data: sectors.map((sectorId: number) => ({
+            data: sectors.map((sectorId: number, index: number) => ({
               userId: id,
               sectorId,
-              sectorName: sectorMap.get(sectorId) || null,
+              sectorName: sectorNames[index] || null,
             })),
           });
         }
@@ -315,7 +343,31 @@ users.patch('/:id', async (req, res) => {
         },
       });
 
-      res.json(user);
+      // Atualizar nomes dos setores usando mapeamento do sistema
+      if (user.sectors.length > 0) {
+        const { getSectorNamesFromUserSector } = await import('../utils/sectorMapping');
+        const { dataSource } = await import('../adapters/dataSource');
+        const equipamentos = await dataSource.equipamentos({
+          apenasAtivos: true,
+          incluirComponentes: false,
+          incluirCustoSubstituicao: false,
+        });
+
+        const sectorIds = user.sectors.map((s) => s.sectorId);
+        const sectorNames = await getSectorNamesFromUserSector(sectorIds, equipamentos, user.id, req);
+
+        const userWithMappedSectors = {
+          ...user,
+          sectors: user.sectors.map((sector, index) => ({
+            ...sector,
+            sectorName: sectorNames[index] || sector.sectorName || `Setor ${sector.sectorId}`,
+          })),
+        };
+
+        res.json(userWithMappedSectors);
+      } else {
+        res.json(user);
+      }
     }
   } catch (e: any) {
     res.status(500).json({ error: true, message: e?.message });
@@ -374,22 +426,37 @@ users.get('/sectors/list', async (req, res) => {
         incluirCustoSubstituicao: false,
       });
 
-      // Criar mapa de setores: nome -> ID
-      const sectorsMap = new Map<string, number>();
+      // Criar mapa de setores: SetorId -> nome mapeado
+      const sectorsMap = new Map<number, string>();
+      
+      // Primeiro, coletar todos os setores únicos dos equipamentos
       equipamentos.forEach((eq: any) => {
         if (eq.Setor) {
           const setorName = eq.Setor.trim();
-          // Se tem SetorId, usar ele; senão gerar ID consistente do nome
           const sectorId = eq.SetorId || getSectorIdFromName(setorName);
-          if (!sectorsMap.has(setorName)) {
-            sectorsMap.set(setorName, sectorId);
+          if (!sectorsMap.has(sectorId)) {
+            sectorsMap.set(sectorId, setorName);
           }
         }
       });
 
+      // Buscar nomes mapeados usando a lógica do sistema
+      const sectorIds = Array.from(sectorsMap.keys());
+      if (sectorIds.length > 0) {
+        const { getSectorNamesFromUserSector } = await import('../utils/sectorMapping');
+        const sectorNames = await getSectorNamesFromUserSector(sectorIds, equipamentos, undefined, req);
+        
+        // Atualizar mapa com nomes mapeados
+        sectorIds.forEach((id, index) => {
+          if (sectorNames[index]) {
+            sectorsMap.set(id, sectorNames[index]);
+          }
+        });
+      }
+
       // Converter para array e ordenar por nome
       const sectors = Array.from(sectorsMap.entries())
-        .map(([name, id]) => ({
+        .map(([id, name]) => ({
           id,
           name,
         }))
@@ -597,4 +664,5 @@ users.post('/impersonate/stop', async (req, res) => {
     res.status(500).json({ error: true, message: e?.message || 'Erro ao parar personificação' });
   }
 });
+
 
