@@ -172,7 +172,8 @@ export default function InvestmentsPage() {
       if (
         updatedInvestment.status === 'Aprovado' &&
         previousStatus !== 'Aprovado' &&
-        variables.data.status === 'Aprovado'
+        previousStatus !== null && // Só mostrar se realmente mudou (não é criação nova)
+        (variables.data.status === 'Aprovado' || updatedInvestment.status === 'Aprovado')
       ) {
         // Verificar se já está vinculado a uma purchase request
         queryClient.invalidateQueries({ queryKey: ['purchase-requests'] });
