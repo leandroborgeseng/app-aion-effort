@@ -1760,21 +1760,36 @@ function EditRuleModal({
   const { data: inventoryResponse, isLoading: inventoryLoading, error: inventoryError } = useQuery({
     queryKey: ['inventory', editingRule.sectorId],
     queryFn: async () => {
+      // Buscar TODOS os equipamentos do setor (sem paginação limitante)
       const url = `/api/ecm/lifecycle/inventario?page=1&pageSize=50000&setores=${editingRule.sectorId}`;
       const response = await apiClient.get<any>(url);
       
+      console.log('[EditRuleModal] Resposta do inventário:', {
+        isArray: Array.isArray(response),
+        hasData: !!response?.data,
+        dataIsArray: Array.isArray(response?.data),
+        keys: response && typeof response === 'object' ? Object.keys(response) : 'N/A',
+      });
+      
+      // O endpoint retorna { data: [...], pagination: {...}, statistics: {...} }
       if (response && Array.isArray(response)) {
+        console.log('[EditRuleModal] Resposta é array direto:', response.length);
         return { data: response, statistics: {}, pagination: {} };
       }
       if (response && response.data && Array.isArray(response.data)) {
+        console.log('[EditRuleModal] Equipamentos encontrados em response.data:', response.data.length);
         return response;
       }
       if (response && typeof response === 'object' && !Array.isArray(response)) {
         const arrayFields = Object.keys(response).filter(key => Array.isArray(response[key]));
         if (arrayFields.length > 0) {
-          return { data: response[arrayFields[0]], statistics: response.statistics || {}, pagination: response.pagination || {} };
+          const firstArray = response[arrayFields[0]];
+          console.log('[EditRuleModal] Equipamentos encontrados em', arrayFields[0], ':', firstArray.length);
+          return { data: firstArray, statistics: response.statistics || {}, pagination: response.pagination || {} };
         }
       }
+      
+      console.warn('[EditRuleModal] Nenhum equipamento encontrado na resposta');
       return { data: [], statistics: {}, pagination: {} };
     },
     enabled: !!editingRule.sectorId,

@@ -104,12 +104,27 @@ export default function PurchaseRequestsPage() {
     },
   });
 
-  // Buscar OS
+  // Buscar OS abertas
   const { data: osList } = useQuery({
-    queryKey: ['os-list'],
+    queryKey: ['os-list-open'],
     queryFn: async () => {
-      const response = await apiClient.get('/api/ecm/os');
-      return Array.isArray(response) ? response : [];
+      const response = await apiClient.get('/api/ecm/os?page=1&pageSize=50000');
+      // O endpoint retorna { items, page, pageSize, totalItems, ... }
+      let osArray: any[] = [];
+      if (Array.isArray(response)) {
+        osArray = response;
+      } else if (response?.items && Array.isArray(response.items)) {
+        osArray = response.items;
+      }
+      
+      // Filtrar apenas OS abertas (não canceladas)
+      const osAbertas = osArray.filter((os: any) => {
+        const status = (os.SituacaoDaOS || os.Status || '').toLowerCase();
+        return !status.includes('cancelada') && !status.includes('cancelado') && 
+               !status.includes('fechada') && !status.includes('fechado');
+      });
+      
+      return osAbertas;
     },
   });
 
