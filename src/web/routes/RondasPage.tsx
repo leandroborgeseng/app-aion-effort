@@ -604,6 +604,138 @@ export default function RondasPage() {
           onCancel={() => setShowInvestmentForm(null)}
         />
       )}
+
+      {/* Modal de Resumo Inteligente */}
+      {summaryRoundId && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: theme.spacing.md,
+          }}
+          onClick={() => {
+            setSummaryRoundId(null);
+            setSummaryData(null);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: theme.colors.white,
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.xl,
+              maxWidth: '800px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: theme.shadows.lg,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.lg }}>
+              <h2 style={{ margin: 0, color: theme.colors.dark, display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+                <FiSparkles size={24} color={theme.colors.info} />
+                Resumo Inteligente da Ronda
+              </h2>
+              <button
+                onClick={() => {
+                  setSummaryRoundId(null);
+                  setSummaryData(null);
+                }}
+                style={{
+                  padding: theme.spacing.xs,
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  cursor: 'pointer',
+                  color: theme.colors.gray[600],
+                  fontSize: '24px',
+                  lineHeight: 1,
+                }}
+              >
+                <FiX />
+              </button>
+            </div>
+
+            {isGeneratingSummary ? (
+              <div style={{ textAlign: 'center', padding: theme.spacing.xl }}>
+                <FiSparkles size={48} color={theme.colors.info} style={{ marginBottom: theme.spacing.md }} />
+                <p style={{ color: theme.colors.gray[600] }}>Gerando resumo inteligente com IA...</p>
+              </div>
+            ) : summaryData ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
+                {/* Resumo Geral */}
+                <div>
+                  <h3 style={{ margin: `0 0 ${theme.spacing.sm} 0`, color: theme.colors.dark, fontSize: '18px' }}>Resumo Geral</h3>
+                  <p style={{ margin: 0, color: theme.colors.gray[700], lineHeight: 1.6, whiteSpace: 'pre-line' }}>{summaryData.summary}</p>
+                </div>
+
+                {/* Destaques */}
+                {summaryData.highlights && summaryData.highlights.length > 0 && (
+                  <div>
+                    <h3 style={{ margin: `0 0 ${theme.spacing.sm} 0`, color: theme.colors.dark, fontSize: '18px' }}>Principais Destaques</h3>
+                    <ul style={{ margin: 0, paddingLeft: theme.spacing.lg, color: theme.colors.gray[700] }}>
+                      {summaryData.highlights.map((highlight: string, idx: number) => (
+                        <li key={idx} style={{ marginBottom: theme.spacing.xs, lineHeight: 1.6 }}>
+                          {highlight}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Preocupações */}
+                {summaryData.concerns && summaryData.concerns.length > 0 && (
+                  <div>
+                    <h3 style={{ margin: `0 0 ${theme.spacing.sm} 0`, color: theme.colors.warning, fontSize: '18px' }}>Áreas que Requerem Atenção</h3>
+                    <ul style={{ margin: 0, paddingLeft: theme.spacing.lg, color: theme.colors.gray[700] }}>
+                      {summaryData.concerns.map((concern: string, idx: number) => (
+                        <li key={idx} style={{ marginBottom: theme.spacing.xs, lineHeight: 1.6 }}>
+                          {concern}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Recomendações */}
+                {summaryData.recommendations && summaryData.recommendations.length > 0 && (
+                  <div>
+                    <h3 style={{ margin: `0 0 ${theme.spacing.sm} 0`, color: theme.colors.primary, fontSize: '18px' }}>Recomendações</h3>
+                    <ul style={{ margin: 0, paddingLeft: theme.spacing.lg, color: theme.colors.gray[700] }}>
+                      {summaryData.recommendations.map((recommendation: string, idx: number) => (
+                        <li key={idx} style={{ marginBottom: theme.spacing.xs, lineHeight: 1.6 }}>
+                          {recommendation}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Insights */}
+                {summaryData.insights && summaryData.insights.length > 0 && (
+                  <div>
+                    <h3 style={{ margin: `0 0 ${theme.spacing.sm} 0`, color: theme.colors.info, fontSize: '18px' }}>Insights Adicionais</h3>
+                    <ul style={{ margin: 0, paddingLeft: theme.spacing.lg, color: theme.colors.gray[700] }}>
+                      {summaryData.insights.map((insight: string, idx: number) => (
+                        <li key={idx} style={{ marginBottom: theme.spacing.xs, lineHeight: 1.6 }}>
+                          {insight}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
