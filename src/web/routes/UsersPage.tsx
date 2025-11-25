@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { theme } from '../styles/theme';
 import { useUser } from '../contexts/UserContext';
 import ConfirmationDialog from '../components/ConfirmationDialog';
+import { apiClient } from '../lib/apiClient';
 
 interface UserSector {
   id: string;
@@ -116,17 +117,7 @@ export default function UsersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/users/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: 'Erro ao deletar usuário' }));
-        throw new Error(errorData.message || 'Erro ao deletar usuário');
-      }
-      return res.json();
+      return apiClient.delete(`/api/users/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -149,26 +140,17 @@ export default function UsersPage() {
 
   const changePasswordMutation = useMutation({
     mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
-      const res = await fetch(`/api/users/${userId}/password`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newPassword: password }),
-      });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Erro ao alterar senha');
-      }
-      return res.json();
+      return apiClient.patch(`/api/users/${userId}/password`, { newPassword: password });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setPasswordChangeUserId(null);
       setNewPassword('');
       setConfirmPassword('');
-      alert('Senha alterada com sucesso!');
+      toast.success('Senha alterada com sucesso!');
     },
     onError: (error: any) => {
-      alert('Erro ao alterar senha: ' + (error?.message || 'Erro desconhecido'));
+      toast.error('Erro ao alterar senha: ' + (error?.message || 'Erro desconhecido'));
     },
   });
 
