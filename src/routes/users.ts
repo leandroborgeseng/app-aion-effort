@@ -4,6 +4,7 @@ import * as fs from 'node:fs/promises';
 import { getSectorIdFromName } from '../utils/sectorMapping';
 
 import { getPrisma } from '../services/prismaService';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
 
 const USE_MOCK = process.env.USE_MOCK === 'true';
 
@@ -685,8 +686,13 @@ users.post('/impersonate', async (req, res) => {
 });
 
 // PATCH /api/users/:id/password - Alterar senha de usuário (apenas admin)
-users.patch('/:id/password', async (req, res) => {
+users.patch('/:id/password', authenticateToken, async (req: AuthRequest, res) => {
   try {
+    // Verificar se o usuário logado é admin
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: true, message: 'Apenas administradores podem alterar senhas' });
+    }
+
     const { id } = req.params;
     const { newPassword } = req.body;
 
@@ -715,57 +721,17 @@ users.patch('/:id/password', async (req, res) => {
       const bcrypt = await import('bcrypt');
       const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
 
-      // Atualizar senha
+      // Atualizar senha e resetar bloqueios de login
       await prismaClient.user.update({
         where: { id },
-        data: { password: hashedPassword },
+        data: { 
+          password: hashedPassword,
+          loginAttempts: 0,
+          lockedUntil: null,
+        },
       });
 
-      res.json({ ok: true, message: 'Senha alterada com sucesso' });
-    }
-  } catch (e: any) {
-    console.error('[users:PATCH/:id/password] Erro:', e);
-    res.status(500).json({ error: true, message: e?.message || 'Erro ao alterar senha' });
-  }
-});
-
-// PATCH /api/users/:id/password - Alterar senha de usuário (apenas admin)
-users.patch('/:id/password', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { newPassword } = req.body;
-
-    if (!newPassword || newPassword.trim().length < 6) {
-      return res.status(400).json({ error: true, message: 'Senha deve ter pelo menos 6 caracteres' });
-    }
-
-    if (USE_MOCK) {
-      res.json({ ok: true, message: 'Senha alterada com sucesso' });
-    } else {
-      const prismaClient = await getPrisma();
-      if (!prismaClient) {
-        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
-      }
-
-      // Verificar se o usuário existe
-      const user = await prismaClient.user.findUnique({
-        where: { id },
-      });
-
-      if (!user) {
-        return res.status(404).json({ error: true, message: 'Usuário não encontrado' });
-      }
-
-      // Gerar hash da nova senha
-      const bcrypt = await import('bcrypt');
-      const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
-
-      // Atualizar senha
-      await prismaClient.user.update({
-        where: { id },
-        data: { password: hashedPassword },
-      });
-
+      console.log(`[users:PATCH/:id/password] Senha alterada para usuário ${user.email} por admin ${req.user?.email}`);
       res.json({ ok: true, message: 'Senha alterada com sucesso' });
     }
   } catch (e: any) {
