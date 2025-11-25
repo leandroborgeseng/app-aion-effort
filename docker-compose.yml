@@ -40,6 +40,8 @@ services:
       - ./prisma:/app/prisma:rw
       # Persistir uploads
       - ./uploads:/app/uploads:rw
+      # Montar scripts como volume para atualizar sem rebuild
+      - ./scripts:/app/scripts:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
