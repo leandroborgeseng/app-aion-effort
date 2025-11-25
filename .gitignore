@@ -5,9 +5,14 @@ dist
 *.log
 
 # Database
-# Permitir dev.db no Git (banco pequeno, facilita deploy)
-#*.db
-#*.db-journal
-#prisma/dev.db
-prisma/dev.db-journal
+# IMPORTANTE: Banco de produção NÃO deve ser versionado
+# O banco de produção fica apenas no servidor e não é substituído pelo de homologação
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+prisma/dev.db
+prisma/dev.db-*
+prisma/*.db
+prisma/*.db-*
 
