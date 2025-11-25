@@ -8,7 +8,16 @@ cd /opt/apps/app-aion-effort || exit 1
 
 echo "1. Parando e removendo container corrompido..."
 docker-compose stop backend 2>/dev/null || true
-docker rm -f aion-effort-backend ea3ca5f4e5aa_aion-effort-backend 2>/dev/null || true
+
+# Remover todos os containers backend encontrados (incluindo variações de nomes)
+CONTAINER_IDS=$(docker ps -a --filter "name=aion-effort-backend" --format "{{.ID}}" 2>/dev/null || true)
+if [ ! -z "$CONTAINER_IDS" ]; then
+  echo "   Encontrados containers: $CONTAINER_IDS"
+  echo "$CONTAINER_IDS" | xargs docker rm -f 2>/dev/null || true
+fi
+
+# Remover containers com nomes conhecidos
+docker rm -f aion-effort-backend ea3ca5f4e5aa_aion-effort-backend 58b68f58b28c_aion-effort-backend 2>/dev/null || true
 docker-compose rm -f backend 2>/dev/null || true
 echo "   ✅ Containers removidos"
 echo ""
