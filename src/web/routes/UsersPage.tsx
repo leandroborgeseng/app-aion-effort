@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FiUsers, FiPlus, FiEdit2, FiTrash2, FiSave, FiX, FiEye, FiEyeOff, FiShield, FiMapPin, FiLock } from 'react-icons/fi';
+import toast from 'react-hot-toast';
 import { theme } from '../styles/theme';
 import { useUser } from '../contexts/UserContext';
+import ConfirmationDialog from '../components/ConfirmationDialog';
 
 interface UserSector {
   id: string;
@@ -46,6 +48,11 @@ export default function UsersPage() {
   const [passwordChangeUserId, setPasswordChangeUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; userId: string | null; userName: string | null }>({
+    isOpen: false,
+    userId: null,
+    userName: null,
+  });
   const queryClient = useQueryClient();
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
@@ -111,12 +118,23 @@ export default function UsersPage() {
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/users/${id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
       });
-      if (!res.ok) throw new Error('Erro ao deletar usuário');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: 'Erro ao deletar usuário' }));
+        throw new Error(errorData.message || 'Erro ao deletar usuário');
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      setDeleteConfirm({ isOpen: false, userId: null, userName: null });
+      toast.success('Usuário excluído com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error('Erro ao excluir usuário: ' + (error?.message || 'Erro desconhecido'));
     },
   });
 
@@ -817,23 +835,28 @@ export default function UsersPage() {
                     >
                       <FiEdit2 size={16} />
                     </button>
-                    <button
-                      onClick={() => {
-                        if (confirm(`Tem certeza que deseja deletar ${user.name}?`)) {
-                          deleteMutation.mutate(user.id);
-                        }
-                      }}
-                      style={{
-                        padding: theme.spacing.xs,
-                        borderRadius: theme.borderRadius.sm,
-                        border: 'none',
-                        backgroundColor: theme.colors.gray[100],
-                        color: theme.colors.danger,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <FiTrash2 size={16} />
-                    </button>
+                    {currentUser?.role === 'admin' && (
+                      <button
+                        onClick={() => {
+                          setDeleteConfirm({
+                            isOpen: true,
+                            userId: user.id,
+                            userName: user.name,
+                          });
+                        }}
+                        title="Excluir usuário"
+                        style={{
+                          padding: theme.spacing.xs,
+                          borderRadius: theme.borderRadius.sm,
+                          border: 'none',
+                          backgroundColor: theme.colors.gray[100],
+                          color: theme.colors.danger,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -841,6 +864,23 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Modal de Confirmação de Exclusão */}
+      <ConfirmationDialog
+        isOpen={deleteConfirm.isOpen}
+        title="Excluir Usuário"
+        message={`Tem certeza que deseja excluir o usuário "${deleteConfirm.userName}"? Esta ação não pode ser desfeita e todos os dados associados a este usuário serão perdidos.`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        type="danger"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteConfirm.userId) {
+            deleteMutation.mutate(deleteConfirm.userId);
+          }
+        }}
+        onCancel={() => setDeleteConfirm({ isOpen: false, userId: null, userName: null })}
+      />
 
       {/* Modal de Alterar Senha */}
       {passwordChangeUserId && (

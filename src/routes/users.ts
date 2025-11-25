@@ -428,27 +428,59 @@ users.patch('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id - Deletar usuário
-users.delete('/:id', async (req, res) => {
+// DELETE /api/users/:id - Deletar usuário (apenas admin)
+users.delete('/:id', authenticateToken, async (req: AuthRequest, res) => {
   try {
+    // Verificar se o usuário logado é admin
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: true, message: 'Apenas administradores podem excluir usuários' });
+    }
+
     const { id } = req.params;
 
+    // Não permitir que um admin exclua a si mesmo
+    if (req.userId === id) {
+      return res.status(400).json({ error: true, message: 'Você não pode excluir sua própria conta' });
+    }
+
     if (USE_MOCK) {
-      res.json({ ok: true });
+      res.json({ ok: true, message: 'Usuário excluído com sucesso' });
     } else {
       const prismaClient = await getPrisma();
       if (!prismaClient) {
         return res.status(500).json({ error: true, message: 'Prisma não disponível' });
       }
 
+      // Verificar se o usuário existe
+      const user = await prismaClient.user.findUnique({
+        where: { id },
+        select: { id: true, email: true, name: true },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: true, message: 'Usuário não encontrado' });
+      }
+
+      // Deletar usuário (cascade vai deletar relacionamentos)
       await prismaClient.user.delete({
         where: { id },
       });
 
-      res.json({ ok: true });
+      console.log(`[users:DELETE/:id] Usuário ${user.email} excluído por admin ${req.user?.email}`);
+      res.json({ ok: true, message: 'Usuário excluído com sucesso' });
     }
   } catch (e: any) {
-    res.status(500).json({ error: true, message: e?.message });
+    console.error('[users:DELETE/:id] Erro:', e);
+    
+    // Se for erro de constraint (usuário tem relacionamentos), informar melhor
+    if (e?.code === 'P2003' || e?.message?.includes('Foreign key constraint')) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Não é possível excluir este usuário pois ele possui dados vinculados. Desative o usuário ao invés de excluí-lo.' 
+      });
+    }
+    
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao excluir usuário' });
   }
 });
 
