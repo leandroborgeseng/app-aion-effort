@@ -59,59 +59,44 @@ export default function UsersPage() {
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: async () => {
-      const res = await fetch('/api/users');
-      if (!res.ok) throw new Error('Erro ao buscar usuários');
-      return res.json();
+      return apiClient.get<User[]>('/api/users');
     },
   });
 
   const { data: sectors } = useQuery<Sector[]>({
     queryKey: ['sectors'],
     queryFn: async () => {
-      const res = await fetch('/api/users/sectors/list');
-      if (!res.ok) throw new Error('Erro ao buscar setores');
-      return res.json();
+      return apiClient.get<Sector[]>('/api/users/sectors/list');
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: Partial<User & { password?: string }>) => {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Erro ao criar usuário');
-      }
-      return res.json();
+      return apiClient.post('/api/users', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setShowForm(false);
       setFormData({});
-      alert('Usuário criado com sucesso! Senha padrão: senha123');
+      toast.success('Usuário criado com sucesso! Senha padrão: senha123');
     },
     onError: (error: any) => {
-      alert('Erro ao criar usuário: ' + (error?.message || 'Erro desconhecido'));
+      toast.error('Erro ao criar usuário: ' + (error?.message || 'Erro desconhecido'));
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<User> }) => {
-      const res = await fetch(`/api/users/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error('Erro ao atualizar usuário');
-      return res.json();
+      return apiClient.patch(`/api/users/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setEditingId(null);
       setFormData({});
+      toast.success('Usuário atualizado com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error('Erro ao atualizar usuário: ' + (error?.message || 'Erro desconhecido'));
     },
   });
 
