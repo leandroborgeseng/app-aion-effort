@@ -94,6 +94,7 @@ services:
       - backend
     networks:
       - aion-network
+      - default  # Conectar também à rede padrão para acessar agilepm-web
     healthcheck:
       test: ["CMD", "caddy", "version"]
       interval: 30s
