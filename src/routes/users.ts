@@ -283,8 +283,64 @@ users.post('/', async (req, res) => {
   }
 });
 
+// PATCH /api/users/:id/password - Alterar senha de usuário (apenas admin)
+// IMPORTANTE: Esta rota deve vir ANTES de /:id para não ser capturada pela rota genérica
+users.patch('/:id/password', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    // Verificar se o usuário logado é admin
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: true, message: 'Apenas administradores podem alterar senhas' });
+    }
+
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({ error: true, message: 'Senha deve ter pelo menos 6 caracteres' });
+    }
+
+    if (USE_MOCK) {
+      res.json({ ok: true, message: 'Senha alterada com sucesso' });
+    } else {
+      const prismaClient = await getPrisma();
+      if (!prismaClient) {
+        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
+      }
+
+      // Verificar se o usuário existe
+      const user = await prismaClient.user.findUnique({
+        where: { id },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: true, message: 'Usuário não encontrado' });
+      }
+
+      // Gerar hash da nova senha
+      const bcrypt = await import('bcrypt');
+      const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
+
+      // Atualizar senha e resetar bloqueios de login
+      await prismaClient.user.update({
+        where: { id },
+        data: { 
+          password: hashedPassword,
+          loginAttempts: 0,
+          lockedUntil: null,
+        },
+      });
+
+      console.log(`[users:PATCH/:id/password] Senha alterada para usuário ${user.email} por admin ${req.user?.email}`);
+      res.json({ ok: true, message: 'Senha alterada com sucesso' });
+    }
+  } catch (e: any) {
+    console.error('[users:PATCH/:id/password] Erro:', e);
+    res.status(500).json({ error: true, message: e?.message || 'Erro ao alterar senha' });
+  }
+});
+
 // PATCH /api/users/:id - Atualizar usuário
-users.patch('/:id', async (req, res) => {
+users.patch('/:id', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     const { email, name, phone, role, active, sectors, canImpersonate, managedUserIds } = req.body;
@@ -714,61 +770,6 @@ users.post('/impersonate', async (req, res) => {
   } catch (e: any) {
     console.error('[users:impersonate] Erro:', e);
     res.status(500).json({ error: true, message: e?.message || 'Erro ao iniciar personificação' });
-  }
-});
-
-// PATCH /api/users/:id/password - Alterar senha de usuário (apenas admin)
-users.patch('/:id/password', authenticateToken, async (req: AuthRequest, res) => {
-  try {
-    // Verificar se o usuário logado é admin
-    if (req.user?.role !== 'admin') {
-      return res.status(403).json({ error: true, message: 'Apenas administradores podem alterar senhas' });
-    }
-
-    const { id } = req.params;
-    const { newPassword } = req.body;
-
-    if (!newPassword || newPassword.trim().length < 6) {
-      return res.status(400).json({ error: true, message: 'Senha deve ter pelo menos 6 caracteres' });
-    }
-
-    if (USE_MOCK) {
-      res.json({ ok: true, message: 'Senha alterada com sucesso' });
-    } else {
-      const prismaClient = await getPrisma();
-      if (!prismaClient) {
-        return res.status(500).json({ error: true, message: 'Prisma não disponível' });
-      }
-
-      // Verificar se o usuário existe
-      const user = await prismaClient.user.findUnique({
-        where: { id },
-      });
-
-      if (!user) {
-        return res.status(404).json({ error: true, message: 'Usuário não encontrado' });
-      }
-
-      // Gerar hash da nova senha
-      const bcrypt = await import('bcrypt');
-      const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
-
-      // Atualizar senha e resetar bloqueios de login
-      await prismaClient.user.update({
-        where: { id },
-        data: { 
-          password: hashedPassword,
-          loginAttempts: 0,
-          lockedUntil: null,
-        },
-      });
-
-      console.log(`[users:PATCH/:id/password] Senha alterada para usuário ${user.email} por admin ${req.user?.email}`);
-      res.json({ ok: true, message: 'Senha alterada com sucesso' });
-    }
-  } catch (e: any) {
-    console.error('[users:PATCH/:id/password] Erro:', e);
-    res.status(500).json({ error: true, message: e?.message || 'Erro ao alterar senha' });
   }
 });
 
