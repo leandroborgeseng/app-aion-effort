@@ -80,7 +80,33 @@ export default function LoginPage() {
           body: JSON.stringify(credentials),
         });
 
-        const data = await response.json();
+        // Verificar se a resposta é JSON válido antes de fazer parse
+        const contentType = response.headers.get('content-type');
+        let data: any;
+        
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const text = await response.text();
+            if (!text || text.trim() === '') {
+              throw new Error('Resposta vazia do servidor');
+            }
+            data = JSON.parse(text);
+          } catch (jsonError: any) {
+            console.error('[LoginPage] Erro ao parsear JSON:', jsonError);
+            console.error('[LoginPage] Resposta recebida:', await response.clone().text());
+            throw new Error('Resposta inválida do servidor. Tente novamente em alguns instantes.');
+          }
+        } else {
+          // Se não for JSON, tentar ler como texto para debug
+          const text = await response.text();
+          console.error('[LoginPage] Resposta não é JSON:', {
+            status: response.status,
+            statusText: response.statusText,
+            contentType,
+            body: text.substring(0, 500), // Primeiros 500 caracteres
+          });
+          throw new Error('Erro no servidor. Tente novamente em alguns instantes.');
+        }
 
         // Se não for sucesso, lançar erro com mensagem específica
         if (!response.ok) {
