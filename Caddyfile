@@ -68,9 +68,9 @@ av.aion.eng.br {
 
 # HTTPS - Proxy reverso para aplicação PM (porta 8080)
 pm.aion.eng.br {
-    # Proxy reverso para aplicação PM rodando em outro container Docker
-    # Opção 1: Se estiver na mesma rede Docker, usar o nome do container
-    reverse_proxy agilepm-web:80 {
+    # Proxy reverso para aplicação PM rodando em outro container Docker (agilepm-web)
+    # O container expõe a porta 8080 no host, então acessamos via host.docker.internal
+    reverse_proxy host.docker.internal:8080 {
         # Headers importantes
         header_up Host {host}
         header_up X-Real-IP {remote_host}
