@@ -1,0 +1,183 @@
+name: CD - Deploy para Produção
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'README.md'
+
+jobs:
+  deploy:
+    name: Deploy para Produção
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Necessário para git diff
+
+      - name: 🔐 Configurar SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 🔍 Verificar conectividade SSH
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo 'Conexão SSH OK'"
+
+      - name: 📋 Verificar mudanças
+        id: changes
+        run: |
+          echo "Verificando mudanças desde último deploy..."
+          HAS_SCHEMA_CHANGES=$(git diff HEAD@{1} HEAD --name-only 2>/dev/null | grep -q "prisma/schema.prisma" && echo "true" || echo "false")
+          HAS_FRONTEND_CHANGES=$(git diff HEAD@{1} HEAD --name-only 2>/dev/null | grep -E "src/web|src/utils|Dockerfile.frontend|package.json|pnpm-lock.yaml|vite.config.ts" | wc -l)
+          HAS_BACKEND_CHANGES=$(git diff HEAD@{1} HEAD --name-only 2>/dev/null | grep -E "src/server|src/routes|src/middleware|Dockerfile.backend|package.json|pnpm-lock.yaml" | wc -l)
+          
+          echo "schema_changes=$HAS_SCHEMA_CHANGES" >> $GITHUB_OUTPUT
+          echo "frontend_changes=$HAS_FRONTEND_CHANGES" >> $GITHUB_OUTPUT
+          echo "backend_changes=$HAS_BACKEND_CHANGES" >> $GITHUB_OUTPUT
+          
+          echo "📊 Mudanças detectadas:"
+          echo "  - Schema Prisma: $HAS_SCHEMA_CHANGES"
+          echo "  - Frontend: $HAS_FRONTEND_CHANGES arquivos"
+          echo "  - Backend: $HAS_BACKEND_CHANGES arquivos"
+
+      - name: 🚀 Deploy para servidor
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          # Criar script de deploy temporário
+          cat > /tmp/deploy.sh << 'DEPLOY_SCRIPT'
+          #!/bin/bash
+          set -e
+          
+          cd $DEPLOY_PATH || exit 1
+          
+          echo "🔄 Atualizando código do repositório..."
+          git fetch origin
+          
+          # Fazer backup do banco antes de atualizar
+          if [ -f "prisma/dev.db" ]; then
+            BACKUP_FILE="prisma/dev.db.backup.$(date +%Y%m%d_%H%M%S)"
+            cp prisma/dev.db "$BACKUP_FILE"
+            echo "✅ Backup criado: $BACKUP_FILE"
+          fi
+          
+          # Resolver conflitos locais no banco
+          if ! git diff --quiet prisma/dev.db 2>/dev/null; then
+            echo "⚠️ Descartando mudanças locais no banco..."
+            git checkout -- prisma/dev.db 2>/dev/null || true
+            rm -f prisma/dev.db-journal prisma/dev.db-wal prisma/dev.db-shm
+          fi
+          
+          # Atualizar código
+          git pull origin main
+          
+          echo "✅ Código atualizado"
+          
+          # Verificar se precisa rebuild baseado nas mudanças
+          SCHEMA_CHANGES="${{ steps.changes.outputs.schema_changes }}"
+          FRONTEND_CHANGES="${{ steps.changes.outputs.frontend_changes }}"
+          BACKEND_CHANGES="${{ steps.changes.outputs.backend_changes }}"
+          
+          # Sincronizar schema se houver mudanças
+          if [ "$SCHEMA_CHANGES" = "true" ]; then
+            echo "🔄 Sincronizando schema do Prisma..."
+            docker-compose run --rm backend pnpm prisma:db:push || {
+              echo "⚠️ Erro ao sincronizar schema, tentando continuar..."
+            }
+          fi
+          
+          # Rebuild se necessário
+          REBUILD_NEEDED=false
+          
+          if [ "$FRONTEND_CHANGES" -gt "0" ]; then
+            echo "🔨 Rebuildando frontend (mudanças detectadas)..."
+            REBUILD_NEEDED=true
+          fi
+          
+          if [ "$BACKEND_CHANGES" -gt "0" ]; then
+            echo "🔨 Rebuildando backend (mudanças detectadas)..."
+            REBUILD_NEEDED=true
+          fi
+          
+          if [ "$REBUILD_NEEDED" = "true" ]; then
+            echo "🔨 Rebuildando containers..."
+            docker-compose build --no-cache backend frontend || {
+              echo "❌ Erro no build, tentando rebuild individual..."
+              docker-compose build --no-cache backend || true
+              docker-compose build --no-cache frontend || true
+            }
+          fi
+          
+          # Reiniciar serviços
+          echo "🔄 Reiniciando serviços..."
+          if [ "$REBUILD_NEEDED" = "true" ]; then
+            docker-compose up -d backend frontend
+          else
+            docker-compose restart backend frontend
+          fi
+          
+          # Aguardar inicialização
+          echo "⏳ Aguardando serviços inicializarem..."
+          sleep 10
+          
+          # Verificar saúde dos serviços
+          echo "🏥 Verificando saúde dos serviços..."
+          BACKEND_HEALTH=$(docker-compose ps backend | grep -q "Up.*healthy" && echo "OK" || echo "CHECKING")
+          FRONTEND_HEALTH=$(docker-compose ps frontend | grep -q "Up.*healthy" && echo "OK" || echo "CHECKING")
+          
+          echo "  Backend: $BACKEND_HEALTH"
+          echo "  Frontend: $FRONTEND_HEALTH"
+          
+          # Aguardar um pouco mais se ainda estiver inicializando
+          if [ "$BACKEND_HEALTH" != "OK" ] || [ "$FRONTEND_HEALTH" != "OK" ]; then
+            echo "⏳ Aguardando mais 15 segundos..."
+            sleep 15
+            BACKEND_HEALTH=$(docker-compose ps backend | grep -q "Up" && echo "OK" || echo "FALHOU")
+            FRONTEND_HEALTH=$(docker-compose ps frontend | grep -q "Up" && echo "OK" || echo "FALHOU")
+          fi
+          
+          if [ "$BACKEND_HEALTH" != "OK" ] || [ "$FRONTEND_HEALTH" != "OK" ]; then
+            echo "⚠️ Alguns serviços podem não estar funcionando corretamente"
+            echo "📋 Logs do backend:"
+            docker-compose logs --tail=20 backend
+            echo "📋 Logs do frontend:"
+            docker-compose logs --tail=20 frontend
+            exit 1
+          fi
+          
+          echo "✅ Deploy concluído com sucesso!"
+          DEPLOY_SCRIPT
+          
+          # Enviar e executar script
+          chmod +x /tmp/deploy.sh
+          scp -o StrictHostKeyChecking=no /tmp/deploy.sh $SSH_USER@$SSH_HOST:/tmp/deploy.sh
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "DEPLOY_PATH=$DEPLOY_PATH bash /tmp/deploy.sh"
+
+      - name: ✅ Verificar deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          echo "🔍 Verificando status final dos serviços..."
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "cd $DEPLOY_PATH && docker-compose ps"
+
+      - name: 📢 Notificar resultado
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Deploy concluído com sucesso!"
+            echo "🌐 Aplicação disponível em: https://av.aion.eng.br"
+          else
+            echo "❌ Deploy falhou! Verifique os logs acima."
+          fi
+

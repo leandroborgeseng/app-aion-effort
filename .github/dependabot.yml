@@ -1,0 +1,35 @@
+# Configuração do Dependabot para atualizações automáticas de dependências
+
+version: 2
+updates:
+  # Atualizar dependências npm/pnpm
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "leandroborges"
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    ignore:
+      # Ignorar atualizações de breaking changes
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    
+  # Atualizar ações do GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+

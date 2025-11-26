@@ -1,0 +1,71 @@
+name: Validação de Pull Request
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  validate-pr:
+    name: Validar Pull Request
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: 📦 Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: 📥 Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔍 Validar sintaxe TypeScript
+        run: pnpm exec tsc --noEmit
+
+      - name: ✅ Validar Prisma Schema
+        run: pnpm prisma:generate
+
+      - name: 🏗️ Build Frontend
+        run: pnpm build
+
+      - name: 📊 Verificar mudanças
+        run: |
+          echo "📋 Arquivos modificados nesta PR:"
+          git diff --name-only origin/${{ github.base_ref }}...HEAD | head -20
+          
+          echo ""
+          echo "📊 Estatísticas:"
+          echo "  - Total de arquivos: $(git diff --name-only origin/${{ github.base_ref }}...HEAD | wc -l)"
+          echo "  - Linhas adicionadas: $(git diff --numstat origin/${{ github.base_ref }}...HEAD | awk '{sum+=$1} END {print sum}')"
+          echo "  - Linhas removidas: $(git diff --numstat origin/${{ github.base_ref }}...HEAD | awk '{sum+=$2} END {print sum}')"
+
+      - name: ⚠️ Verificar arquivos sensíveis
+        run: |
+          SENSITIVE_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E "\.env|\.key|secrets|password|token" || true)
+          if [ -n "$SENSITIVE_FILES" ]; then
+            echo "⚠️ ATENÇÃO: Arquivos sensíveis detectados na PR:"
+            echo "$SENSITIVE_FILES"
+            echo "Por favor, certifique-se de que nenhum dado sensível está sendo commitado!"
+            exit 1
+          fi
+          echo "✅ Nenhum arquivo sensível detectado"
+
+      - name: ✅ PR validada
+        run: |
+          echo "✅ Pull Request validada com sucesso!"
+          echo "📝 Checklist:"
+          echo "  ✅ TypeScript compila sem erros"
+          echo "  ✅ Prisma schema válido"
+          echo "  ✅ Frontend build funciona"
+          echo "  ✅ Sem arquivos sensíveis"
+
