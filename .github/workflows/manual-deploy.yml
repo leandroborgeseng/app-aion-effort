@@ -1,0 +1,94 @@
+name: Deploy Manual (Workflow Dispatch)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente de deploy'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+      force_rebuild:
+        description: 'Forçar rebuild completo?'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  manual-deploy:
+    name: Deploy Manual - ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v6
+
+      - name: 🔐 Configurar SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 🚀 Deploy Manual
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          FORCE_REBUILD: ${{ github.event.inputs.force_rebuild }}
+        run: |
+          cat > /tmp/manual-deploy.sh << 'DEPLOY_SCRIPT'
+          #!/bin/bash
+          set -e
+          
+          cd $DEPLOY_PATH || exit 1
+          
+          echo "🚀 DEPLOY MANUAL INICIADO"
+          echo "========================="
+          echo "Ambiente: ${{ github.event.inputs.environment }}"
+          echo "Force Rebuild: $FORCE_REBUILD"
+          echo ""
+          
+          # Backup do banco
+          if [ -f "prisma/dev.db" ]; then
+            BACKUP_FILE="prisma/dev.db.backup.manual.$(date +%Y%m%d_%H%M%S)"
+            cp prisma/dev.db "$BACKUP_FILE"
+            echo "✅ Backup criado: $BACKUP_FILE"
+          fi
+          
+          # Atualizar código
+          echo "🔄 Atualizando código..."
+          git fetch origin
+          git pull origin main
+          
+          # Sincronizar schema
+          echo "🔄 Sincronizando schema..."
+          docker-compose run --rm backend pnpm prisma:db:push || true
+          
+          # Rebuild se solicitado
+          if [ "$FORCE_REBUILD" = "true" ]; then
+            echo "🔨 Forçando rebuild completo..."
+            docker-compose build --no-cache backend frontend
+            docker-compose up -d backend frontend
+          else
+            echo "🔄 Reiniciando serviços..."
+            docker-compose restart backend frontend
+          fi
+          
+          # Aguardar inicialização
+          sleep 15
+          
+          # Verificar status
+          echo "📊 Status dos serviços:"
+          docker-compose ps
+          
+          echo "✅ Deploy manual concluído!"
+          DEPLOY_SCRIPT
+          
+          chmod +x /tmp/manual-deploy.sh
+          scp -o StrictHostKeyChecking=no /tmp/manual-deploy.sh $SSH_USER@$SSH_HOST:/tmp/manual-deploy.sh
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "DEPLOY_PATH=$DEPLOY_PATH FORCE_REBUILD=$FORCE_REBUILD bash /tmp/manual-deploy.sh"
+
