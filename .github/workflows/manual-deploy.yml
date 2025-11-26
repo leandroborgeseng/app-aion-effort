@@ -26,7 +26,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 🔐 Configurar SSH
         uses: webfactory/ssh-agent@v0.9.0
