@@ -604,7 +604,12 @@ export default function ContractsPage() {
 
       {/* Formulário */}
       {showForm && (
-        <div
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleSave();
+          }}
           style={{
             backgroundColor: theme.colors.white,
             padding: theme.spacing.lg,
@@ -964,21 +969,7 @@ export default function ContractsPage() {
           {/* Botões */}
           <div style={{ marginTop: theme.spacing.md, display: 'flex', gap: theme.spacing.sm }}>
             <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('=== BOTÃO CLICADO ===');
-                console.log('formData atual:', formData);
-                console.log('selectedEquipmentIds:', selectedEquipmentIds);
-                console.log('editingId:', editingId);
-                try {
-                  handleSave();
-                } catch (error) {
-                  console.error('Erro ao chamar handleSave:', error);
-                  alert('Erro: ' + (error as Error).message);
-                }
-              }}
+              type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
               style={{
                 display: 'flex',
@@ -1026,7 +1017,7 @@ export default function ContractsPage() {
               Cancelar
             </button>
           </div>
-        </div>
+        </form>
       )}
 
       {/* Modal de Visualização */}

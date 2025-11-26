@@ -297,8 +297,7 @@ contracts.post('/', upload.single('arquivo'), async (req, res) => {
       };
       contracts.push(newContract);
       await saveContracts(contracts);
-      // Invalidar cache após criar
-      await deleteCache(cacheKey).catch(() => {});
+      // Invalidar cache após criar (já foi invalidado no início da função)
       res.status(201).json(newContract);
     } else {
       const prismaClient = await getPrisma();
