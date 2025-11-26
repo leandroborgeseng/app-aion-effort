@@ -72,7 +72,8 @@ Para fazer deploy em outra máquina usando Docker:
 📖 **Guia completo de deploy:** [`DEPLOY.md`](DEPLOY.md)  
 🚀 **Deploy no servidor:** [`DEPLOY_SERVIDOR.md`](DEPLOY_SERVIDOR.md) | [`DEPLOY_RAPIDO.md`](DEPLOY_RAPIDO.md)  
 🐳 **Documentação Docker:** [`README.DOCKER.md`](README.DOCKER.md)  
-📦 **Migração de dados:** [`MIGRACAO_DADOS.md`](MIGRACAO_DADOS.md) | [`MIGRACAO_RAPIDA.md`](MIGRACAO_RAPIDA.md)
+📦 **Migração de dados:** [`MIGRACAO_DADOS.md`](MIGRACAO_DADOS.md) | [`MIGRACAO_RAPIDA.md`](MIGRACAO_RAPIDA.md)  
+🔄 **CI/CD e Deploy Automático:** [`CI_CD_SETUP.md`](CI_CD_SETUP.md)
 
 ## Variáveis de Ambiente Necessárias
 
@@ -89,4 +90,28 @@ EFFORT_API_KEY=seu-token-aqui
 ```
 
 Veja `API_TOKENS.md` para todos os tokens necessários.
+
+## CI/CD - Deploy Automático
+
+Este projeto possui pipeline de CI/CD configurado com GitHub Actions:
+
+- ✅ **CI**: Validação e build automático em cada push/PR
+- 🚀 **CD**: Deploy automático para produção ao fazer merge em `main`
+- 🔍 **Validação de PRs**: Verificações extras em pull requests
+- 🛠️ **Deploy Manual**: Deploy sob demanda via GitHub Actions UI
+
+📚 **Guia completo de configuração:** [`CI_CD_SETUP.md`](CI_CD_SETUP.md)
+
+### Status do CI
+
+![CI](https://github.com/leandroborgeseng/app-aion-effort/actions/workflows/ci.yml/badge.svg)
+
+### Workflows Disponíveis
+
+- `ci.yml` - Validação e build
+- `cd-producao.yml` - Deploy automático para produção
+- `pr-validation.yml` - Validação de pull requests
+- `manual-deploy.yml` - Deploy manual
+
+Veja `.github/workflows/README.md` para mais detalhes.
 
