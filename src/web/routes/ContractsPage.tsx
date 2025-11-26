@@ -36,6 +36,7 @@ export default function ContractsPage() {
   const [equipmentSearchTerm, setEquipmentSearchTerm] = useState('');
   const [showEquipmentSelector, setShowEquipmentSelector] = useState(false);
   const [viewingContract, setViewingContract] = useState<Contract | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const queryClient = useQueryClient();
 
   // Construir query string para setores se não for admin
@@ -308,36 +309,60 @@ export default function ContractsPage() {
     console.log('selectedEquipmentIds:', selectedEquipmentIds);
     console.log('editingId:', editingId);
     
+    // Limpar erros anteriores
+    setValidationErrors({});
+    const errors: Record<string, string> = {};
+    
     // Validação
     if (!formData.nome?.trim()) {
-      console.log('❌ Validação falhou: nome vazio');
-      toast.error('Nome do contrato é obrigatório');
-      return;
+      errors.nome = 'Nome do contrato é obrigatório';
     }
     if (!formData.fornecedor?.trim()) {
-      console.log('❌ Validação falhou: fornecedor vazio');
-      toast.error('Fornecedor é obrigatório');
-      return;
+      errors.fornecedor = 'Fornecedor é obrigatório';
     }
     if (!formData.tipoContrato) {
-      console.log('❌ Validação falhou: tipoContrato vazio');
-      toast.error('Tipo de contrato é obrigatório');
-      return;
+      errors.tipoContrato = 'Tipo de contrato é obrigatório';
     }
     const valorAnualNum = parseFloat(String(formData.valorAnual || '0'));
     if (!formData.valorAnual || isNaN(valorAnualNum) || valorAnualNum <= 0) {
-      console.log('❌ Validação falhou: valorAnual inválido', formData.valorAnual);
-      toast.error('Valor anual deve ser maior que zero');
-      return;
+      errors.valorAnual = 'Valor anual deve ser maior que zero';
     }
     if (!formData.dataInicio) {
-      console.log('❌ Validação falhou: dataInicio vazia');
-      toast.error('Data de início é obrigatória');
-      return;
+      errors.dataInicio = 'Data de início é obrigatória';
     }
     if (!formData.dataFim) {
-      console.log('❌ Validação falhou: dataFim vazia');
-      toast.error('Data de fim é obrigatória');
+      errors.dataFim = 'Data de fim é obrigatória';
+    }
+
+    // Verificar se data fim é anterior à data início
+    if (formData.dataInicio && formData.dataFim) {
+      const dataInicio = new Date(formData.dataInicio);
+      const dataFim = new Date(formData.dataFim);
+      if (dataFim < dataInicio) {
+        errors.dataFim = 'Data de fim deve ser posterior à data de início';
+      }
+    }
+
+    // Se houver erros, exibir e retornar
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      
+      // Criar mensagem resumida para o toast
+      const errorFields = Object.keys(errors);
+      const errorMessages = errorFields.map(field => errors[field]).join(', ');
+      toast.error(`Erro de validação: ${errorMessages}`, {
+        duration: 5000,
+      });
+      
+      // Scroll para o primeiro campo com erro
+      const firstErrorField = errorFields[0];
+      const errorElement = document.querySelector(`[data-field="${firstErrorField}"]`);
+      if (errorElement) {
+        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (errorElement as HTMLElement).focus();
+      }
+      
+      console.log('❌ Validação falhou:', errors);
       return;
     }
 
@@ -581,6 +606,7 @@ export default function ContractsPage() {
               setSelectedEquipmentIds([]);
               setEquipmentSearchTerm('');
               setShowEquipmentSelector(false);
+              setValidationErrors({});
             }}
             style={{
               display: 'flex',
@@ -642,16 +668,32 @@ export default function ContractsPage() {
               </label>
               <input
                 type="text"
+                data-field="nome"
                 value={formData.nome || ''}
-                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, nome: e.target.value }));
+                  // Limpar erro ao digitar
+                  if (validationErrors.nome) {
+                    setValidationErrors((prev) => {
+                      const newErrors = { ...prev };
+                      delete newErrors.nome;
+                      return newErrors;
+                    });
+                  }
+                }}
                 style={{
                   width: '100%',
                   padding: theme.spacing.sm,
-                  border: `1px solid ${theme.colors.gray[300]}`,
+                  border: `1px solid ${validationErrors.nome ? theme.colors.danger : theme.colors.gray[300]}`,
                   backgroundColor: theme.colors.white,
                   color: theme.colors.dark,
                 }}
               />
+              {validationErrors.nome && (
+                <p style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '12px', color: theme.colors.danger }}>
+                  {validationErrors.nome}
+                </p>
+              )}
             </div>
             
             <div>
@@ -660,16 +702,31 @@ export default function ContractsPage() {
               </label>
               <input
                 type="text"
+                data-field="fornecedor"
                 value={formData.fornecedor || ''}
-                onChange={(e) => setFormData({ ...formData, fornecedor: e.target.value })}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, fornecedor: e.target.value }));
+                  if (validationErrors.fornecedor) {
+                    setValidationErrors((prev) => {
+                      const newErrors = { ...prev };
+                      delete newErrors.fornecedor;
+                      return newErrors;
+                    });
+                  }
+                }}
                 style={{
                   width: '100%',
                   padding: theme.spacing.sm,
-                  border: `1px solid ${theme.colors.gray[300]}`,
+                  border: `1px solid ${validationErrors.fornecedor ? theme.colors.error : theme.colors.gray[300]}`,
                   backgroundColor: theme.colors.white,
                   color: theme.colors.dark,
                 }}
               />
+              {validationErrors.fornecedor && (
+                <p style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '12px', color: theme.colors.danger }}>
+                  {validationErrors.fornecedor}
+                </p>
+              )}
             </div>
             
             <div>
@@ -677,6 +734,7 @@ export default function ContractsPage() {
                 Tipo de Contrato *
               </label>
               <select
+                data-field="tipoContrato"
                 value={formData.tipoContrato || ''}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -686,11 +744,18 @@ export default function ContractsPage() {
                     console.log('🔵 Novo formData após tipoContrato:', newData);
                     return newData;
                   });
+                  if (validationErrors.tipoContrato) {
+                    setValidationErrors((prev) => {
+                      const newErrors = { ...prev };
+                      delete newErrors.tipoContrato;
+                      return newErrors;
+                    });
+                  }
                 }}
                 style={{
                   width: '100%',
                   padding: theme.spacing.sm,
-                  border: `1px solid ${theme.colors.gray[300]}`,
+                  border: `1px solid ${validationErrors.tipoContrato ? theme.colors.error : theme.colors.gray[300]}`,
                   backgroundColor: theme.colors.white,
                   color: theme.colors.dark,
                 }}
@@ -701,6 +766,11 @@ export default function ContractsPage() {
                 <option value="Misto" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Misto</option>
                 <option value="Full Service" style={{ backgroundColor: theme.colors.white, color: theme.colors.dark }}>Full Service</option>
               </select>
+              {validationErrors.tipoContrato && (
+                <p style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '12px', color: theme.colors.danger }}>
+                  {validationErrors.tipoContrato}
+                </p>
+              )}
             </div>
             
             <div>
@@ -709,18 +779,33 @@ export default function ContractsPage() {
               </label>
               <input
                 type="number"
+                data-field="valorAnual"
                 step="0.01"
                 min="0"
                 value={formData.valorAnual || ''}
-                onChange={(e) => setFormData({ ...formData, valorAnual: e.target.value })}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, valorAnual: e.target.value }));
+                  if (validationErrors.valorAnual) {
+                    setValidationErrors((prev) => {
+                      const newErrors = { ...prev };
+                      delete newErrors.valorAnual;
+                      return newErrors;
+                    });
+                  }
+                }}
                 style={{
                   width: '100%',
                   padding: theme.spacing.sm,
-                  border: `1px solid ${theme.colors.gray[300]}`,
+                  border: `1px solid ${validationErrors.valorAnual ? theme.colors.error : theme.colors.gray[300]}`,
                   backgroundColor: theme.colors.white,
                   color: theme.colors.dark,
                 }}
               />
+              {validationErrors.valorAnual && (
+                <p style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '12px', color: theme.colors.danger }}>
+                  {validationErrors.valorAnual}
+                </p>
+              )}
             </div>
             
             <div>
@@ -729,20 +814,33 @@ export default function ContractsPage() {
               </label>
               <input
                 type="date"
+                data-field="dataInicio"
                 value={formData.dataInicio ? formData.dataInicio.split('T')[0] : ''}
                 onChange={(e) => {
                   const value = `${e.target.value}T00:00:00`;
                   console.log('🔵 DataInicio selecionada:', value);
                   setFormData((prev) => ({ ...prev, dataInicio: value }));
+                  if (validationErrors.dataInicio) {
+                    setValidationErrors((prev) => {
+                      const newErrors = { ...prev };
+                      delete newErrors.dataInicio;
+                      return newErrors;
+                    });
+                  }
                 }}
                 style={{
                   width: '100%',
                   padding: theme.spacing.sm,
-                  border: `1px solid ${theme.colors.gray[300]}`,
+                  border: `1px solid ${validationErrors.dataInicio ? theme.colors.error : theme.colors.gray[300]}`,
                   backgroundColor: theme.colors.white,
                   color: theme.colors.dark,
                 }}
               />
+              {validationErrors.dataInicio && (
+                <p style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '12px', color: theme.colors.danger }}>
+                  {validationErrors.dataInicio}
+                </p>
+              )}
             </div>
             
             <div>
@@ -751,20 +849,33 @@ export default function ContractsPage() {
               </label>
               <input
                 type="date"
+                data-field="dataFim"
                 value={formData.dataFim ? formData.dataFim.split('T')[0] : ''}
                 onChange={(e) => {
                   const value = `${e.target.value}T23:59:59`;
                   console.log('🔵 DataFim selecionada:', value);
                   setFormData((prev) => ({ ...prev, dataFim: value }));
+                  if (validationErrors.dataFim) {
+                    setValidationErrors((prev) => {
+                      const newErrors = { ...prev };
+                      delete newErrors.dataFim;
+                      return newErrors;
+                    });
+                  }
                 }}
                 style={{
                   width: '100%',
                   padding: theme.spacing.sm,
-                  border: `1px solid ${theme.colors.gray[300]}`,
+                  border: `1px solid ${validationErrors.dataFim ? theme.colors.error : theme.colors.gray[300]}`,
                   backgroundColor: theme.colors.white,
                   color: theme.colors.dark,
                 }}
               />
+              {validationErrors.dataFim && (
+                <p style={{ margin: `${theme.spacing.xs} 0 0 0`, fontSize: '12px', color: theme.colors.danger }}>
+                  {validationErrors.dataFim}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1027,6 +1138,7 @@ export default function ContractsPage() {
                 setSelectedEquipmentIds([]);
                 setEquipmentSearchTerm('');
                 setShowEquipmentSelector(false);
+                setValidationErrors({});
               }}
               style={{
                 display: 'flex',
