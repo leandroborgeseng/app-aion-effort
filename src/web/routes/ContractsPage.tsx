@@ -678,7 +678,15 @@ export default function ContractsPage() {
               </label>
               <select
                 value={formData.tipoContrato || ''}
-                onChange={(e) => setFormData({ ...formData, tipoContrato: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  console.log('🔵 TipoContrato selecionado:', value);
+                  setFormData((prev) => {
+                    const newData = { ...prev, tipoContrato: value };
+                    console.log('🔵 Novo formData após tipoContrato:', newData);
+                    return newData;
+                  });
+                }}
                 style={{
                   width: '100%',
                   padding: theme.spacing.sm,
@@ -722,9 +730,11 @@ export default function ContractsPage() {
               <input
                 type="date"
                 value={formData.dataInicio ? formData.dataInicio.split('T')[0] : ''}
-                onChange={(e) =>
-                  setFormData({ ...formData, dataInicio: `${e.target.value}T00:00:00` })
-                }
+                onChange={(e) => {
+                  const value = `${e.target.value}T00:00:00`;
+                  console.log('🔵 DataInicio selecionada:', value);
+                  setFormData((prev) => ({ ...prev, dataInicio: value }));
+                }}
                 style={{
                   width: '100%',
                   padding: theme.spacing.sm,
@@ -742,9 +752,11 @@ export default function ContractsPage() {
               <input
                 type="date"
                 value={formData.dataFim ? formData.dataFim.split('T')[0] : ''}
-                onChange={(e) =>
-                  setFormData({ ...formData, dataFim: `${e.target.value}T23:59:59` })
-                }
+                onChange={(e) => {
+                  const value = `${e.target.value}T23:59:59`;
+                  console.log('🔵 DataFim selecionada:', value);
+                  setFormData((prev) => ({ ...prev, dataFim: value }));
+                }}
                 style={{
                   width: '100%',
                   padding: theme.spacing.sm,
