@@ -302,7 +302,7 @@ export default function ContractsPage() {
     }).format(parseFloat(value));
   };
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     console.log('=== HANDLE SAVE CHAMADO ===');
     console.log('formData:', JSON.stringify(formData, null, 2));
     console.log('selectedEquipmentIds:', selectedEquipmentIds);
@@ -372,7 +372,7 @@ export default function ContractsPage() {
       });
     }
     console.log('✅ Mutation chamada');
-  };
+  }, [formData, selectedEquipmentIds, editingId, updateMutation, createMutation]);
 
   const toggleEquipmentSelection = (equipmentId: number) => {
     setSelectedEquipmentIds((prev) => {
@@ -606,9 +606,16 @@ export default function ContractsPage() {
       {showForm && (
         <form
           onSubmit={(e) => {
+            console.log('=== FORM SUBMIT EVENT ===');
             e.preventDefault();
             e.stopPropagation();
-            handleSave();
+            console.log('Chamando handleSave...');
+            try {
+              handleSave();
+            } catch (error) {
+              console.error('Erro ao chamar handleSave:', error);
+              toast.error('Erro ao salvar contrato: ' + (error as Error).message);
+            }
           }}
           style={{
             backgroundColor: theme.colors.white,
@@ -971,6 +978,15 @@ export default function ContractsPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
+              onClick={(e) => {
+                console.log('=== BOTÃO SALVAR CLICADO (onClick) ===');
+                console.log('isPending:', createMutation.isPending || updateMutation.isPending);
+                // Garantir que handleSave seja chamado mesmo se o form não disparar onSubmit
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Chamando handleSave diretamente do onClick...');
+                handleSave();
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
