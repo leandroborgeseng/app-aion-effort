@@ -7,8 +7,9 @@ services:
       dockerfile: Dockerfile.backend
     container_name: aion-effort-backend
     # Expor porta diretamente (será tratado pelo nginx externo)
+    # Usando porta 5000 para evitar conflito com agilepm-api na porta 4000
     ports:
-      - "4000:4000"
+      - "5000:4000"
     env_file:
       - .env
     environment:
