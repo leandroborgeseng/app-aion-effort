@@ -3,6 +3,7 @@
 # Colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
+YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}Starting Production Deployment...${NC}"
@@ -31,21 +32,25 @@ echo -e "${GREEN}3. Checking service health...${NC}"
 echo "Waiting for services to initialize (30s)..."
 sleep 30
 
+check_health() {
+    local container_name=$1
+    local status=$(docker inspect --format='{{.State.Health.Status}}' $container_name 2>/dev/null)
+    
+    if [ "$status" == "healthy" ]; then
+        echo -e "${GREEN}$container_name is Healthy!${NC}"
+        return 0
+    else
+        echo -e "${RED}$container_name health check failed! Status: ${status:-unknown}${NC}"
+        echo "Check logs with: docker logs $container_name"
+        return 1
+    fi
+}
+
 # Check backend health
-if curl -s http://localhost:4000/health | grep -q "true"; then
-    echo -e "${GREEN}Backend is Healthy!${NC}"
-else
-    echo -e "${RED}Backend health check failed!${NC}"
-    echo "Check logs with: docker-compose logs backend"
-fi
+check_health "aion-effort-backend"
 
 # Check frontend health
-if curl -s http://localhost/health | grep -q "200"; then
-    echo -e "${GREEN}Frontend is Healthy!${NC}"
-else
-    echo -e "${RED}Frontend health check failed!${NC}"
-    echo "Check logs with: docker-compose logs frontend"
-fi
+check_health "aion-effort-frontend"
 
-echo -e "${GREEN}Deployment Complete!${NC}"
-echo "Access the application at: http://localhost"
+echo -e "${GREEN}Deployment Process Finished.${NC}"
+echo "If services are healthy, access the application at: https://av.aion.eng.br"

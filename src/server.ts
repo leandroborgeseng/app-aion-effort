@@ -61,10 +61,50 @@ app.get('/DOCUMENTACAO_USUARIO.md', (_req, res) => {
   }
 });
 
-// Health check (antes de tudo)
-app.get('/health', (_req, res) =>
-  res.json({ ok: true, mock: process.env.USE_MOCK === 'true' })
-);
+// Health check (antes de tudo) - verifica conectividade com banco
+app.get('/health', async (_req, res) => {
+  try {
+    const health: any = {
+      ok: true,
+      timestamp: new Date().toISOString(),
+      mock: process.env.USE_MOCK === 'true',
+      services: {
+        database: 'unknown',
+      },
+    };
+
+    // Verificar conexão com banco de dados se não estiver em modo mock
+    if (process.env.USE_MOCK !== 'true') {
+      try {
+        const { getPrisma } = await import('./services/prismaService');
+        const prisma = await getPrisma();
+        if (prisma) {
+          // Testar conexão com uma query simples
+          await prisma.$queryRaw`SELECT 1 as test`;
+          health.services.database = 'connected';
+        } else {
+          health.services.database = 'unavailable';
+          health.ok = false;
+        }
+      } catch (dbError: any) {
+        health.services.database = 'error';
+        health.services.databaseError = dbError.message;
+        health.ok = false;
+      }
+    } else {
+      health.services.database = 'mock_mode';
+    }
+
+    const statusCode = health.ok ? 200 : 503;
+    res.status(statusCode).json(health);
+  } catch (error: any) {
+    res.status(503).json({
+      ok: false,
+      timestamp: new Date().toISOString(),
+      error: error.message,
+    });
+  }
+});
 
 // Debug endpoint para verificar arquivos do frontend
 app.get('/debug/frontend', (_req, res) => {
@@ -163,11 +203,63 @@ app.use(errorMiddleware);
 console.log('Backend API server - frontend is served by separate nginx container');
 
 const port = Number(process.env.PORT) || 4000;
-app.listen(port, async () => {
-  console.log(`API up on :${port} (USE_MOCK=${process.env.USE_MOCK})`);
-  
-  // Iniciar serviço de warm-up das APIs
-  const { startWarmupService } = await import('./services/warmupService');
-  startWarmupService();
-});
+
+// Função de inicialização com tratamento de erros
+async function startServer() {
+  try {
+    // Verificar conexão com banco antes de iniciar (apenas em produção)
+    if (process.env.USE_MOCK !== 'true' && process.env.NODE_ENV === 'production') {
+      console.log('[server] Verificando conexão com banco de dados...');
+      try {
+        const { getPrisma } = await import('./services/prismaService');
+        const prisma = await getPrisma();
+        if (prisma) {
+          await prisma.$queryRaw`SELECT 1 as test`;
+          console.log('[server] ✅ Conexão com banco de dados OK');
+        } else {
+          console.warn('[server] ⚠️  Prisma Client não disponível, continuando...');
+        }
+      } catch (dbError: any) {
+        console.error('[server] ❌ Erro ao conectar com banco de dados:', dbError.message);
+        // Não impedir o servidor de iniciar, mas logar o erro
+      }
+    }
+
+    app.listen(port, async () => {
+      console.log(`[server] ✅ API iniciada na porta ${port} (USE_MOCK=${process.env.USE_MOCK})`);
+      
+      try {
+        // Iniciar serviço de warm-up das APIs
+        const { startWarmupService } = await import('./services/warmupService');
+        startWarmupService();
+        console.log('[server] ✅ Serviço de warm-up iniciado');
+      } catch (warmupError: any) {
+        console.error('[server] ⚠️  Erro ao iniciar warm-up service:', warmupError.message);
+        // Não bloquear o servidor por causa do warm-up
+      }
+    });
+
+    // Tratamento de erros não capturados
+    process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+      console.error('[server] ❌ Unhandled Rejection:', reason);
+      console.error('[server] Promise:', promise);
+    });
+
+    process.on('uncaughtException', (error: Error) => {
+      console.error('[server] ❌ Uncaught Exception:', error);
+      // Em produção, pode ser necessário encerrar o processo
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[server] Encerrando processo devido a erro crítico...');
+        process.exit(1);
+      }
+    });
+
+  } catch (error: any) {
+    console.error('[server] ❌ Erro crítico ao iniciar servidor:', error);
+    console.error('[server] Stack:', error.stack);
+    process.exit(1);
+  }
+}
+
+startServer();
 

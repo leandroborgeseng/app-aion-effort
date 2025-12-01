@@ -18,7 +18,12 @@ if (process.env.NODE_ENV === 'development') {
   console.log('[effortClient] Base URL:', baseURL);
 }
 
-export const effort = axios.create({ baseURL, timeout: 30000 });
+export const effort = axios.create({
+  baseURL,
+  timeout: 45000, // 45 segundos (aumentado para requisições mais complexas)
+  // Configurações adicionais para melhor estabilidade
+  validateStatus: (status) => status < 500, // Aceitar qualquer status < 500 como válido
+});
 
 effort.interceptors.request.use((config) => {
   // Obtém o token específico para o endpoint
@@ -69,6 +74,18 @@ effort.interceptors.response.use(
         console.error('[effortClient] 2. Se há conectividade de rede');
         console.error('[effortClient] 3. Se há firewall bloqueando');
         console.error('[effortClient] 4. Se o servidor DNS está acessível');
+      }
+      
+      // Tratamento específico para timeout
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        console.error('[effortClient] ⚠️ Timeout na requisição:', error.config?.url);
+        console.error('[effortClient] A requisição demorou mais que 45 segundos');
+      }
+      
+      // Tratamento para conexão recusada
+      if (error.code === 'ECONNREFUSED') {
+        console.error('[effortClient] ⚠️ Conexão recusada pelo servidor:', baseURL);
+        console.error('[effortClient] Verifique se o servidor está online e acessível');
       }
     } else {
       console.error('[effortClient] Erro:', error.message);
