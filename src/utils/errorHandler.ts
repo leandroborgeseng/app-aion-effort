@@ -123,6 +123,66 @@ export function formatError(error: any): { error: boolean; message: string; code
     };
   }
 
+  // Erro de API externa (Effort) retornando 503
+  if (error.response?.status === 503 || error.status === 503) {
+    return {
+      error: true,
+      message: 'A API Effort está temporariamente indisponível. Por favor, tente novamente em alguns instantes.',
+      code: 'EFFORT_API_UNAVAILABLE',
+      externalError: true,
+    };
+  }
+
+  // Erro de API externa (Effort) - qualquer erro 5xx
+  if (error.response?.status >= 500 && error.response?.status < 600) {
+    return {
+      error: true,
+      message: 'Erro na API Effort. Por favor, tente novamente em alguns instantes.',
+      code: 'EFFORT_API_ERROR',
+      externalError: true,
+    };
+  }
+
+  // Erro de API externa (Effort) retornando 503
+  if (error.response?.status === 503 || error.status === 503) {
+    return {
+      error: true,
+      message: 'A API Effort está temporariamente indisponível. Por favor, tente novamente em alguns instantes.',
+      code: 'EFFORT_API_UNAVAILABLE',
+      externalError: true,
+    };
+  }
+
+  // Erro de API externa (Effort) - qualquer erro 5xx
+  if (error.response?.status >= 500 && error.response?.status < 600) {
+    return {
+      error: true,
+      message: 'Erro na API Effort. Por favor, tente novamente em alguns instantes.',
+      code: 'EFFORT_API_ERROR',
+      externalError: true,
+    };
+  }
+
+  // Detectar erros axios da API Effort
+  if (error.isAxiosError && error.response?.status) {
+    if (error.response.status === 503) {
+      return {
+        error: true,
+        message: 'A API Effort está temporariamente indisponível. Por favor, tente novamente em alguns instantes.',
+        code: 'EFFORT_API_UNAVAILABLE',
+        externalError: true,
+      };
+    }
+    if (error.response.status >= 500 && error.response.status < 600) {
+      return {
+        error: true,
+        message: 'Erro na API Effort. Por favor, tente novamente em alguns instantes.',
+        code: 'EFFORT_API_ERROR',
+        externalError: true,
+      };
+    }
+  }
+
   // Erro genérico (não expor detalhes em produção)
   const isDevelopment = process.env.NODE_ENV !== 'production';
   return {

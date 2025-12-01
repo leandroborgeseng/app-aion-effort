@@ -152,7 +152,18 @@ os.get('/', async (req, res) => {
   } catch (e: any) {
     console.error('[os] Erro:', e?.message);
     console.error('[os] Stack:', e?.stack);
-    res.status(500).json({ error: true, message: e?.message || 'Erro ao buscar ordens de serviço' });
+    
+    // Detectar se é erro da API Effort (503 ou 5xx)
+    const statusCode = e?.response?.status || e?.status || 500;
+    const isEffortError = statusCode === 503 || (statusCode >= 500 && statusCode < 600);
+    
+    res.status(isEffortError ? 503 : 500).json({ 
+      error: true, 
+      message: isEffortError 
+        ? 'A API Effort está temporariamente indisponível. Por favor, tente novamente em alguns instantes.'
+        : e?.message || 'Erro ao buscar ordens de serviço',
+      code: isEffortError ? 'EFFORT_API_UNAVAILABLE' : 'INTERNAL_ERROR',
+    });
   }
 });
 
@@ -557,9 +568,20 @@ os.get('/equipamentos-com-os-abertas', async (req, res) => {
   } catch (e: any) {
     console.error('[os/equipamentos-com-os-abertas] Erro:', e?.message);
     console.error('[os/equipamentos-com-os-abertas] Stack:', e?.stack);
-    res.status(500).json({ 
+    
+    // Detectar se é erro da API Effort (503 ou outros 5xx)
+    const statusCode = e?.response?.status || e?.status || (e?.code === 'ERR_BAD_RESPONSE' ? 503 : 500);
+    const isEffortError = statusCode === 503 || 
+                         (statusCode >= 500 && statusCode < 600) || 
+                         e?.message?.includes('Request failed with status code 503') ||
+                         e?.message?.includes('503');
+    
+    res.status(isEffortError ? 503 : 500).json({ 
       error: true, 
-      message: e?.message || 'Erro ao buscar equipamentos com OS abertas'
+      message: isEffortError 
+        ? 'A API Effort está temporariamente indisponível. Por favor, tente novamente em alguns instantes.'
+        : e?.message || 'Erro ao buscar equipamentos com OS abertas',
+      code: isEffortError ? 'EFFORT_API_UNAVAILABLE' : 'INTERNAL_ERROR',
     });
   }
 });
